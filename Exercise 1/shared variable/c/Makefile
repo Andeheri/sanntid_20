@@ -19,6 +19,9 @@ $(TARGET): $(OBJ)
 %.o : %.c
 	$(CC) $(CFLAGS) -c  $< -o $@ 
 
+run: $(TARGET)
+	./$(TARGET)
+
 # rule for cleaning re-compilable files.
 clean:
 	rm -f $(TARGET) $(OBJ)
