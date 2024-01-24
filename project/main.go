@@ -1,5 +1,7 @@
 package main
-import (. "fmt")
+import (
+	. "fmt"
+)
 
 type role string
 
@@ -16,6 +18,7 @@ func setElevatorRole(elevator_role *role){
 
 func main() {
 	var elevator_role role = unknown
+	//var udp_port string = "1861"  // Civil war
 
 	setElevatorRole(&elevator_role)
 
