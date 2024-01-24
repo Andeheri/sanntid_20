@@ -19,7 +19,8 @@ func incrementing(ch chan int, finish_ch chan int) {
     finish_ch <- 1
 }
 
-func decrementing(ch chan int, finish_ch chan int) {
+func decrementing(ch chan int, 
+    nish_ch chan int) {
     //TODO: decrement i 1000000 times
     for k := 0; k < 1000000; k++{
         ch <- -1
