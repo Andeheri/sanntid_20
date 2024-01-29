@@ -1,5 +1,7 @@
 package main
+
 import (
+	"elevator/scout"
 	. "fmt"
 )
 
@@ -23,4 +25,10 @@ func main() {
 	setElevatorRole(&elevator_role)
 
 	Printf("Elevator role: %s\n", elevator_role)
+
+	
+	go scout.BroadcastInfo()
+	go scout.ListenForInfo()
+
+	select {}
 }
