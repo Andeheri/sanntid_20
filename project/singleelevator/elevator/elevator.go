@@ -1,7 +1,9 @@
 package elevator
 
-import(
+import (
 	// "single/elevio"
+	"fmt"
+	"single/elevio"
 	"single/iodevice"
 )
 
@@ -28,9 +30,68 @@ type Elevator struct {
     Dirn iodevice.Dirn
     Requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
     Behaviour ElevatorBehaviour
-	Config config 
+	Config Config 
 }
-type config struct{
+type Config struct{
 	ClearRequestVariant ClearRequestVariant
-	DoorOpenDuration_s float32            
+	DoorOpenDuration_s float64            
 } 
+
+func Eb_toString(eb ElevatorBehaviour) string{
+    switch eb {
+    case EB_Idle:
+        return "EB_Idle"
+    case EB_DoorOpen:
+        return "EB_DoorOpen"
+    case EB_Moving:
+        return "EB_Moving"
+    default:
+        return "EB_UNDEFINED"
+    }
+}
+
+func ElevatorPrint(es Elevator) {
+	fmt.Println("  +--------------------+")
+	fmt.Printf(
+		"  |floor = %-2d          |\n"+
+			"  |dirn  = %-12.12s|\n"+
+			"  |behav = %-12.12s|\n",
+		es.Floor,
+		iodevice.Elevio_dirn_toString(es.Dirn),
+		Eb_toString(es.Behaviour),
+	)
+	fmt.Println("  +--------------------+")
+	fmt.Println("  |  | up  | dn  | cab |")
+	for f := iodevice.N_FLOORS - 1; f >= 0; f-- {
+		fmt.Printf("  | %d", f)
+		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
+			if (f == iodevice.N_FLOORS-1 && btn == int(elevio.BT_HallUp)) ||
+				(f == 0 && btn == elevio.BT_HallDown) {
+				fmt.Print("|     ")
+			} else {
+				fmt.Print(func() string {
+					if es.Requests[f][btn] != 0 {
+						return "|  #  "
+					}
+					return "|  -  "
+				}())
+			}
+		}
+		fmt.Println("|")
+	}
+	fmt.Println("  +--------------------+")
+}
+
+
+func Elevator_uninitialized() Elevator{
+    return Elevator{
+        Floor: -1,
+        Dirn: iodevice.D_Stop,
+        Behaviour: EB_Idle,
+        Config: Config {
+            ClearRequestVariant: CV_All,
+            DoorOpenDuration_s: 3.0,
+        },
+    }
+}
+

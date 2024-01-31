@@ -14,12 +14,12 @@ const (
     D_Up Dirn = 1
 )
 
-type Button int
-const (
-    B_HallUp Button = 0
-    B_HallDown Button = 1
-    B_Cab Button = 2
-)
+// type Button int
+// const (
+//     B_HallUp Button = 0
+//     B_HallDown Button = 1
+//     B_Cab Button = 2
+// )
 
 
 type ElevInputDevice struct {
@@ -55,7 +55,7 @@ static void _wrap_motorDirection(Dirn d){
 }
 */
 
-func elevio_getInputDevice() ElevInputDevice {
+func Elevio_getInputDevice() ElevInputDevice {
 	return ElevInputDevice{
         FloorSensor: elevio.GetFloor,
         RequestButton: elevio.GetButton,
@@ -64,7 +64,7 @@ func elevio_getInputDevice() ElevInputDevice {
     }
 }
 
-func elevio_getOutputDevice() ElevOutputDevice{
+func Elevio_getOutputDevice() ElevOutputDevice{
     return ElevOutputDevice{
         FloorIndicator:     elevio.SetFloorIndicator,
         RequestButtonLight: elevio.SetButtonLamp,
@@ -75,7 +75,7 @@ func elevio_getOutputDevice() ElevOutputDevice{
 }
 
 
-func elevio_dirn_toString(d Dirn) string{
+func Elevio_dirn_toString(d Dirn) string{
     switch d {
     case D_Up:
         return "D_Up"
@@ -89,13 +89,13 @@ func elevio_dirn_toString(d Dirn) string{
 }
 
 
-func elevio_button_toString(b Button) string {
+func Elevio_button_toString(b elevio.ButtonType) string {
     switch b {
-    case B_HallUp:
+    case elevio.BT_HallUp:
         return "B_HallUp"
-    case B_HallDown:
+    case elevio.BT_HallDown:
         return "B_HallDown"
-    case B_Cab:
+    case elevio.BT_Cab:
         return "B_Cab"
     default:
         return "B_UNDEFINED"

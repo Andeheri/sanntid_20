@@ -1,24 +1,21 @@
 package main
 
-// import "single/elevio"
-import "fmt"
-import "single/elevator"
+import (
+	"fmt"
+	// "single/elevator"
+	"single/elevio"
+	"single/fsm"
+	// "single/iodevice"
+	"single/timer"
+)
 
 func main(){
-
-    heis := elevator.Elevator{
-        Floor: 2,
-
-    }
-    fmt.Println(heis)
-
-    /*
     numFloors := 4
 
     elevio.Init("localhost:15657", numFloors)
     
     var d elevio.MotorDirection = elevio.MD_Up
-    //elevio.SetMotorDirection(d)
+    // elevio.SetMotorDirection(d)
     
     drv_buttons := make(chan elevio.ButtonEvent)
     drv_floors  := make(chan int)
@@ -29,22 +26,19 @@ func main(){
     go elevio.PollFloorSensor(drv_floors)
     go elevio.PollObstructionSwitch(drv_obstr)
     go elevio.PollStopButton(drv_stop)
-    
+
+    // input := iodevice.Elevio_getInputDevice()
+    fsm.Fsm_init()
     
     for {
         select {
         case a := <- drv_buttons:
             fmt.Printf("%+v\n", a)
-            elevio.SetButtonLamp(a.Button, a.Floor, true)
+            fsm.Fsm_onRequestButtonPress(a.Floor, a.Button)
             
         case a := <- drv_floors:
             fmt.Printf("%+v\n", a)
-            if a == numFloors-1 {
-                d = elevio.MD_Down
-            } else if a == 0 {
-                d = elevio.MD_Up
-            }
-            elevio.SetMotorDirection(d)
+            fsm.Fsm_onFloorArrival(a)
             
             
         case a := <- drv_obstr:
@@ -63,6 +57,10 @@ func main(){
                 }
             }
         }
+
+        if timer.Timer_timedOut() {
+            timer.Timer_stop()
+            fsm.Fsm_onDoorTimeout()
+        }
     }    
-    */
 }
