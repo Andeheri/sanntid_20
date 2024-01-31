@@ -1,23 +1,15 @@
 package scout
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"time"
-	"encoding/binary"
 )
 
 const (
 	UDP_PORT = 23456
-
 )
-
-func main() {
-
-	go broadcastInfo()
-	go listenForInfo()
-	select {}
-}
 
 func uint64ToBytes(num uint64) []byte {
 	bytes := make([]byte, 8)
@@ -25,9 +17,9 @@ func uint64ToBytes(num uint64) []byte {
 	return bytes
 }
 
-func broadcastInfo() {
+func BroadcastInfo() {
 
-	bcastAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprint("255.255.255.255:", UDP_PORT))
+	bcastAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprint("10.22.75.255:", UDP_PORT))
 	if err != nil {
 		fmt.Println("Error resolving broadcast address:", err)
 		return
@@ -41,7 +33,7 @@ func broadcastInfo() {
 	defer bcastConn.Close()
 
 	localAddr := bcastConn.LocalAddr().(*net.UDPAddr)
-	
+
 	addrString := fmt.Sprint(localAddr.IP, ":", localAddr.Port)
 
 	for {
@@ -50,7 +42,7 @@ func broadcastInfo() {
 	}
 }
 
-func listenForInfo() {
+func ListenForInfo() {
 
 	listenAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprint(":", UDP_PORT))
 	if err != nil {
