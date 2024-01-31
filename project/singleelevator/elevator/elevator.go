@@ -1,7 +1,8 @@
 package elevator
 
 import(
-	"single/elevio"
+	// "single/elevio"
+	"single/iodevice"
 )
 
 type ElevatorBehaviour int
@@ -23,13 +24,13 @@ const (
 )
 
 type Elevator struct {
-    floor int
-    dirn elevio.Dirn
-    requests[elevio.N_FLOORS][elevio.N_BUTTONS] int
-    behaviour ElevatorBehaviour
-	config config 
+    Floor int
+    Dirn iodevice.Dirn
+    Requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
+    Behaviour ElevatorBehaviour
+	Config config 
 }
 type config struct{
-	clearRequestVariant ClearRequestVariant
-	doorOpenDuration_s float32            
+	ClearRequestVariant ClearRequestVariant
+	DoorOpenDuration_s float32            
 } 
