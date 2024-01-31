@@ -1,7 +1,0 @@
-[submodule "driver-go"]
-    path = driver-go
-    url = https://github.com/TTK4145/driver-go.git
-
-[submodule "Project-resources"]
-    path = Project-resources
-    url = git@github.com:TTK4145/Project-resources.git

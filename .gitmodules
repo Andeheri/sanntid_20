@@ -1,0 +1,12 @@
+[submodule "Exercise 3/Simulator-v2"]
+	path = Exercise 3/Simulator-v2
+	url = https://github.com/TTK4145/Simulator-v2.git
+[submodule "Exercise 3/driver-go"]
+	path = Exercise 3/driver-go
+	url = https://github.com/TTK4145/driver-go.git
+[submodule "project/driver-go"]
+	path = project/driver-go
+	url = https://github.com/TTK4145/driver-go.git
+[submodule "project/Project-resources"]
+	path = project/Project-resources
+	url = https://github.com/TTK4145/Project-resources.git
