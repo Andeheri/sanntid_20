@@ -1,6 +1,6 @@
 package main
 
-import "main/elevio"
+import "single/elevio"
 import "fmt"
 
 func main(){
