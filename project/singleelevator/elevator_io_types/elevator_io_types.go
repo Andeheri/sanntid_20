@@ -18,18 +18,17 @@ const (
 )
 
 
-typedef struct {
-    int (*floorSensor)(void);
-    int (*requestButton)(int, Button);
-    int (*stopButton)(void);
-    int (*obstruction)(void);
-    
-} ElevInputDevice;
+type ElevInputDevice struct {
+	FloorSensor    func() int
+	RequestButton  func(int, Button) int
+	StopButton     func() int
+	Obstruction    func() int
+}
 
-typedef struct {
-    void (*floorIndicator)(int);
-    void (*requestButtonLight)(int, Button, int);
-    void (*doorLight)(int);
-    void (*stopButtonLight)(int);
-    void (*motorDirection)(Dirn);
-} ElevOutputDevice;
+type ElevOutputDevice struct {
+	FloorIndicator      func(int)
+	RequestButtonLight func(int, Button, int)
+	DoorLight           func(int)
+	StopButtonLight     func(int)
+	MotorDirection      func(Dirn)
+}
