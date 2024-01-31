@@ -2,9 +2,17 @@ package main
 
 import "single/elevio"
 import "fmt"
+import "single/elevator"
 
 func main(){
 
+    heis := elevator.Elevator{
+        Floor: 2,
+
+    }
+    fmt.Println(heis)
+
+    /*
     numFloors := 4
 
     elevio.Init("localhost:15657", numFloors)
@@ -56,4 +64,5 @@ func main(){
             }
         }
     }    
+    */
 }
