@@ -15,21 +15,24 @@ func main(){
     elevio.Init("localhost:15657", numFloors)
     
     var d elevio.MotorDirection = elevio.MD_Up
-    // elevio.SetMotorDirection(d)
+    
     
     drv_buttons := make(chan elevio.ButtonEvent)
     drv_floors  := make(chan int)
     drv_obstr   := make(chan bool)
-    drv_stop    := make(chan bool)    
+    drv_stop    := make(chan bool)  
+    timeout     := make(chan bool)
     
     go elevio.PollButtons(drv_buttons)
     go elevio.PollFloorSensor(drv_floors)
     go elevio.PollObstructionSwitch(drv_obstr)
     go elevio.PollStopButton(drv_stop)
+    go timer.Timer_timedOut(timeout)
 
-    // input := iodevice.Elevio_getInputDevice()
     fsm.Fsm_init()
-    
+    fsm.Fsm_onInitBetweenFloors() //not sure here whether we can assume the elevator doesnt start out of bounds
+    // elevio.SetMotorDirection(d)
+
     for {
         select {
         case a := <- drv_buttons:
@@ -40,7 +43,7 @@ func main(){
             fmt.Printf("%+v\n", a)
             fsm.Fsm_onFloorArrival(a)
             
-            
+        //this is not working
         case a := <- drv_obstr:
             fmt.Printf("%+v\n", a)
             if a {
@@ -56,11 +59,9 @@ func main(){
                     elevio.SetButtonLamp(b, f, false)
                 }
             }
-        }
-
-        if timer.Timer_timedOut() {
-            timer.Timer_stop()
+        case a := <- timeout:
+            fmt.Printf("%+v\n", a)
             fsm.Fsm_onDoorTimeout()
         }
-    }    
+    }
 }

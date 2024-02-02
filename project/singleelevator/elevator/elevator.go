@@ -27,7 +27,7 @@ const (
 
 type Elevator struct {
     Floor int
-    Dirn iodevice.Dirn
+    Dirn elevio.MotorDirection
     Requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
     Behaviour ElevatorBehaviour
 	Config Config 
@@ -86,7 +86,7 @@ func ElevatorPrint(es Elevator) {
 func Elevator_uninitialized() Elevator{
     return Elevator{
         Floor: -1,
-        Dirn: iodevice.D_Stop,
+        Dirn: elevio.MD_Stop,
         Behaviour: EB_Idle,
         Config: Config {
             ClearRequestVariant: CV_All,

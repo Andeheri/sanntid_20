@@ -9,25 +9,9 @@ import(
 	"single/elevio"
 )
 
-var elev elevator.Elevator //had to use elev instead of elevator because of name conflict
+var elev elevator.Elevator = elevator.Elevator_uninitialized()//had to use elev instead of elevator because of name conflict
 var outputDevice iodevice.ElevOutputDevice
 
-
-/*
-static void __attribute__((constructor)) fsm_init(){
-    elevator = elevator_uninitialized();
-    
-    con_load("elev.con",
-        con_val("doorOpenDuration_s", &elev.config.doorOpenDuration_s, "%lf")
-        con_enum("clearRequestVariant", &elev.config.clearRequestVariant,
-            con_match(CV_All)
-            con_match(CV_InDirn)
-        )
-    )
-    
-    outputDevice = elevio_getOutputDevice();
-}
-*/
 
 func Fsm_init(){
     outputDevice = iodevice.Elevio_getOutputDevice()
@@ -43,7 +27,7 @@ func SetAllLights(es elevator.Elevator){
 
 func Fsm_onInitBetweenFloors(){
     outputDevice.MotorDirection(elevio.MD_Down);
-    elev.Dirn = iodevice.D_Down;
+    elev.Dirn = elevio.MD_Down;
     elev.Behaviour = elevator.EB_Moving;
 }
 
@@ -59,11 +43,11 @@ func Fsm_onRequestButtonPress(btn_floor int, btn_type elevio.ButtonType){
         } else {
             elev.Requests[btn_floor][btn_type] = 1;
         }
-        break;
+
 
     case elevator.EB_Moving:
         elev.Requests[btn_floor][btn_type] = 1;
-        break;
+
         
     case elevator.EB_Idle:    
         elev.Requests[btn_floor][btn_type] = 1
@@ -75,17 +59,16 @@ func Fsm_onRequestButtonPress(btn_floor int, btn_type elevio.ButtonType){
             outputDevice.DoorLight(true);
             timer.Timer_start(elev.Config.DoorOpenDuration_s);
             elev = requests.Requests_clearAtCurrentFloor(elev);
-            break;
+
 
         case elevator.EB_Moving:
-			//workaround to satisfy input to motorDirection
-            outputDevice.MotorDirection(elevio.MotorDirection(elev.Dirn));
-            break;
+            outputDevice.MotorDirection(elev.Dirn);
+
             
         case elevator.EB_Idle:
-            break;
+
         }
-        break;
+
     }
     
     SetAllLights(elev);
@@ -108,16 +91,16 @@ func Fsm_onFloorArrival(newFloor int){
     switch(elev.Behaviour){
     case elevator.EB_Moving:
         if requests.Requests_shouldStop(elev){
+            fmt.Println("Opening door")
             outputDevice.MotorDirection(elevio.MD_Stop);
             outputDevice.DoorLight(true);
             elev = requests.Requests_clearAtCurrentFloor(elev);
             timer.Timer_start(elev.Config.DoorOpenDuration_s);
+            fmt.Println(elev.Config.DoorOpenDuration_s)
             SetAllLights(elev);
             elev.Behaviour = elevator.EB_DoorOpen;
         }
-        break;
     default:
-        break;
     }
     
     fmt.Println("\nNew state:")
@@ -133,7 +116,7 @@ func Fsm_onDoorTimeout(){
     elevator.ElevatorPrint(elev);
     
     switch(elev.Behaviour){
-    case elevator.EB_DoorOpen:;
+    case elevator.EB_DoorOpen:
         pair := requests.Requests_chooseDirection(elev);
         elev.Dirn = pair.Dirn;
         elev.Behaviour = pair.Behaviour;
@@ -143,17 +126,17 @@ func Fsm_onDoorTimeout(){
             timer.Timer_start(elev.Config.DoorOpenDuration_s);
             elev = requests.Requests_clearAtCurrentFloor(elev);
             SetAllLights(elev);
-            break;
+
         case elevator.EB_Moving:
+            outputDevice.DoorLight(false);
+            outputDevice.MotorDirection(elevio.MotorDirection(elev.Dirn));
+
         case elevator.EB_Idle:
             outputDevice.DoorLight(false);
             outputDevice.MotorDirection(elevio.MotorDirection(elev.Dirn));
-            break;
         }
         
-        break;
     default:
-        break;
     }
     
     fmt.Println("\nNew state:")

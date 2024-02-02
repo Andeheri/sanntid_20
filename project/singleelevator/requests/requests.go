@@ -7,7 +7,7 @@ import(
 )
 
 type DirnBehaviourPair struct{
-	Dirn iodevice.Dirn
+	Dirn elevio.MotorDirection
 	Behaviour elevator.ElevatorBehaviour
 }
 
@@ -45,51 +45,51 @@ func requests_here(e elevator.Elevator) bool{
 
 func Requests_chooseDirection(e elevator.Elevator) DirnBehaviourPair {
     switch e.Dirn {
-    case iodevice.D_Up:
+    case elevio.MD_Up:
         if requests_above(e) {
-            return DirnBehaviourPair{iodevice.D_Up, elevator.EB_Moving}
+            return DirnBehaviourPair{elevio.MD_Up, elevator.EB_Moving}
         } else if requests_here(e) {
-            return DirnBehaviourPair{iodevice.D_Down, elevator.EB_DoorOpen}
+            return DirnBehaviourPair{elevio.MD_Down, elevator.EB_DoorOpen}
         } else if requests_below(e) {
-            return DirnBehaviourPair{iodevice.D_Down, elevator.EB_Moving}
+            return DirnBehaviourPair{elevio.MD_Down, elevator.EB_Moving}
         } else {
-            return DirnBehaviourPair{iodevice.D_Stop, elevator.EB_Idle}
+            return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_Idle}
         }
 
-    case iodevice.D_Down:
+    case elevio.MD_Down:
         if requests_below(e) {
-            return DirnBehaviourPair{iodevice.D_Down, elevator.EB_Moving}
+            return DirnBehaviourPair{elevio.MD_Down, elevator.EB_Moving}
         } else if requests_here(e) {
-            return DirnBehaviourPair{iodevice.D_Up, elevator.EB_DoorOpen}
+            return DirnBehaviourPair{elevio.MD_Up, elevator.EB_DoorOpen}
         } else if requests_above(e) {
-            return DirnBehaviourPair{iodevice.D_Up, elevator.EB_Moving}
+            return DirnBehaviourPair{elevio.MD_Up, elevator.EB_Moving}
         } else {
-            return DirnBehaviourPair{iodevice.D_Stop, elevator.EB_Idle}
+            return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_Idle}
         }
 
-    case iodevice.D_Stop:
+    case elevio.MD_Stop:
         if requests_here(e) {
-            return DirnBehaviourPair{iodevice.D_Stop, elevator.EB_DoorOpen}
+            return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_DoorOpen}
         } else if requests_above(e) {
-            return DirnBehaviourPair{iodevice.D_Up, elevator.EB_Moving}
+            return DirnBehaviourPair{elevio.MD_Up, elevator.EB_Moving}
         } else if requests_below(e) {
-            return DirnBehaviourPair{iodevice.D_Down, elevator.EB_Moving}
+            return DirnBehaviourPair{elevio.MD_Down, elevator.EB_Moving}
         } else {
-            return DirnBehaviourPair{iodevice.D_Stop, elevator.EB_Idle}
+            return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_Idle}
         }
 
     default:
-        return DirnBehaviourPair{iodevice.D_Stop, elevator.EB_Idle}
+        return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_Idle}
     }
 }
 
 func Requests_shouldStop(e elevator.Elevator) bool{
     switch(e.Dirn){
-    case iodevice.D_Down:
+    case elevio.MD_Down:
         return e.Requests[e.Floor][elevio.BT_HallDown] != 0 || e.Requests[e.Floor][elevio.BT_Cab] != 0 || !requests_below(e);
-    case iodevice.D_Up:
+    case elevio.MD_Up:
         return e.Requests[e.Floor][elevio.BT_HallUp] != 0 || e.Requests[e.Floor][elevio.BT_Cab] != 0 || !requests_above(e);
-    case iodevice.D_Stop:
+    case elevio.MD_Stop:
     default:
         return true
     }
@@ -101,7 +101,7 @@ func Requests_shouldClearImmediately(e elevator.Elevator, btn_floor int, btn_typ
     case elevator.CV_All:
         return e.Floor == btn_floor
     case elevator.CV_InDirn:
-        return e.Floor == btn_floor && e.Dirn == iodevice.D_Up && btn_type == elevio.BT_HallUp || e.Dirn == iodevice.D_Down && btn_type == elevio.BT_HallDown || e.Dirn == iodevice.D_Stop || btn_type == elevio.BT_Cab
+        return e.Floor == btn_floor && e.Dirn == elevio.MD_Up && btn_type == elevio.BT_HallUp || e.Dirn == elevio.MD_Down && btn_type == elevio.BT_HallDown || e.Dirn == elevio.MD_Stop || btn_type == elevio.BT_Cab
     default:
         return false
     }
@@ -114,34 +114,34 @@ func Requests_clearAtCurrentFloor(e elevator.Elevator) elevator.Elevator{
         for btn := 0; btn < iodevice.N_BUTTONS; btn++{
             e.Requests[e.Floor][btn] = 0
         }
-        break
+ 
         
     case elevator.CV_InDirn:
         e.Requests[e.Floor][elevio.BT_Cab] = 0;
         switch(e.Dirn){
-        case iodevice.D_Up:
+        case elevio.MD_Up:
             if(!requests_above(e) && e.Requests[e.Floor][elevio.BT_HallUp] == 0){
                 e.Requests[e.Floor][elevio.BT_HallDown] = 0;
             }
             e.Requests[e.Floor][elevio.BT_HallUp] = 0;
-            break;
+ 
             
-        case iodevice.D_Down:
+        case elevio.MD_Down:
             if(!requests_below(e) && e.Requests[e.Floor][elevio.BT_HallDown] == 0){
                 e.Requests[e.Floor][elevio.BT_HallUp] = 0;
             }
             e.Requests[e.Floor][elevio.BT_HallDown] = 0;
-            break
+
             
-        case iodevice.D_Stop:
+        case elevio.MD_Stop:
         default:
             e.Requests[e.Floor][elevio.BT_HallUp] = 0;
             e.Requests[e.Floor][elevio.BT_HallDown] = 0;
-            break
+
         }
-        break   
+ 
     default:
-        break; 
+
     }    
     return e
 }

@@ -7,27 +7,6 @@ import (
 const N_FLOORS = 4
 const N_BUTTONS = 3
 
-type Dirn int
-const ( 
-    D_Down  Dirn = -1
-    D_Stop  Dirn = 0
-    D_Up Dirn = 1
-)
-
-// type Button int
-// const (
-//     B_HallUp Button = 0
-//     B_HallDown Button = 1
-//     B_Cab Button = 2
-// )
-
-
-type ElevInputDevice struct {
-	FloorSensor    func() int
-	RequestButton  func(elevio.ButtonType, int) bool
-	StopButton     func() bool
-	Obstruction    func() bool
-}
 
 type ElevOutputDevice struct {
 	FloorIndicator      func(int)
@@ -37,32 +16,6 @@ type ElevOutputDevice struct {
 	MotorDirection      func(elevio.MotorDirection)
 }
 
-/*
-kan hende vi må wrappe funksjonenne....
-
-static void __attribute__((constructor)) elev_init(void){
-    elevator_hardware_init();
-}
-
-static int _wrap_requestButton(int f, Button b){
-    return elevator_hardware_get_button_signal(b, f);
-}
-static void _wrap_requestButtonLight(int f, Button b, int v){
-    elevator_hardware_set_button_lamp(b, f, v);
-}
-static void _wrap_motorDirection(Dirn d){
-    elevator_hardware_set_motor_direction(d);
-}
-*/
-
-func Elevio_getInputDevice() ElevInputDevice {
-	return ElevInputDevice{
-        FloorSensor: elevio.GetFloor,
-        RequestButton: elevio.GetButton,
-        StopButton: elevio.GetStop,
-        Obstruction: elevio.GetObstruction,
-    }
-}
 
 func Elevio_getOutputDevice() ElevOutputDevice{
     return ElevOutputDevice{
@@ -75,13 +28,13 @@ func Elevio_getOutputDevice() ElevOutputDevice{
 }
 
 
-func Elevio_dirn_toString(d Dirn) string{
+func Elevio_dirn_toString(d elevio.MotorDirection) string{
     switch d {
-    case D_Up:
+    case elevio.MD_Up:
         return "D_Up"
-    case D_Down:
+    case elevio.MD_Down:
         return "D_Down"
-    case D_Stop:
+    case elevio.MD_Stop:
         return "D_Stop"
     default:
         return "D_UNDEFINED"
