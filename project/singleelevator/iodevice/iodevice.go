@@ -31,26 +31,27 @@ func Elevio_getOutputDevice() ElevOutputDevice{
 func Elevio_dirn_toString(d elevio.MotorDirection) string{
     switch d {
     case elevio.MD_Up:
-        return "D_Up"
+        return "up"
     case elevio.MD_Down:
-        return "D_Down"
+        return "down"
     case elevio.MD_Stop:
-        return "D_Stop"
+        return "stop"
     default:
-        return "D_UNDEFINED"
+        return "UNDEFINED"
     }
 }
+
 
 
 func Elevio_button_toString(b elevio.ButtonType) string {
     switch b {
     case elevio.BT_HallUp:
-        return "B_HallUp"
+        return "HallUp"
     case elevio.BT_HallDown:
-        return "B_HallDown"
+        return "HallDown"
     case elevio.BT_Cab:
-        return "B_Cab"
+        return "Cab"
     default:
-        return "B_UNDEFINED"
+        return "UNDEFINED"
     }
 }

@@ -8,11 +8,11 @@ import (
 	"time"
 )
 
-type ElevatorBehaviour int
+type ElevatorBehaviour string
 const (
-    EB_Idle ElevatorBehaviour = 0
-    EB_DoorOpen ElevatorBehaviour = 1
-    EB_Moving ElevatorBehaviour = 2
+    EB_Idle ElevatorBehaviour = "idle"
+    EB_DoorOpen ElevatorBehaviour = "doorOpen"
+    EB_Moving ElevatorBehaviour = "moving"
 )
 
 type ClearRequestVariant int
@@ -38,19 +38,6 @@ type Config struct{
 	DoorOpenDuration_s time.Duration           
 } 
 
-func Eb_toString(eb ElevatorBehaviour) string{
-    switch eb {
-    case EB_Idle:
-        return "EB_Idle"
-    case EB_DoorOpen:
-        return "EB_DoorOpen"
-    case EB_Moving:
-        return "EB_Moving"
-    default:
-        return "EB_UNDEFINED"
-    }
-}
-
 func ElevatorPrint(es Elevator) {
 	fmt.Println("  +--------------------+")
 	fmt.Printf(
@@ -59,7 +46,7 @@ func ElevatorPrint(es Elevator) {
 			"  |behav = %-12.12s|\n",
 		es.Floor,
 		iodevice.Elevio_dirn_toString(es.Dirn),
-		Eb_toString(es.Behaviour),
+		es.Behaviour,
 	)
 	fmt.Println("  +--------------------+")
 	fmt.Println("  |  | up  | dn  | cab |")
