@@ -34,7 +34,7 @@ func Fsm_onInitBetweenFloors(){
 
 func Fsm_onRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer *time.Timer){
     fmt.Printf("\n(%d, %s)\n", btn_floor, iodevice.Elevio_button_toString(btn_type))
-    elevator.ElevatorPrint(Elev);
+    Elev.Print()
     
     switch(Elev.Behaviour){
     case elevator.EB_DoorOpen:
@@ -72,7 +72,7 @@ func Fsm_onRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_ti
     SetAllLights(Elev);
     
     fmt.Println("\nNew state:")
-    elevator.ElevatorPrint(Elev);
+    Elev.Print();
 }
 
 
@@ -80,7 +80,7 @@ func Fsm_onRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_ti
 
 func Fsm_onFloorArrival(newFloor int, door_timer *time.Timer){
     fmt.Printf("\n(newfloor: %d)\n",newFloor)
-    elevator.ElevatorPrint(Elev);
+    Elev.Print();
 
     Elev.Floor = newFloor;
     
@@ -103,7 +103,7 @@ func Fsm_onFloorArrival(newFloor int, door_timer *time.Timer){
     }
     
     fmt.Println("\nNew state:")
-    elevator.ElevatorPrint(Elev);
+    Elev.Print();
 }
 
 
@@ -112,7 +112,7 @@ func Fsm_onFloorArrival(newFloor int, door_timer *time.Timer){
 func Fsm_onDoorTimeout(door_timer *time.Timer){
     fmt.Println("\n(doorTimeout)")
     
-    elevator.ElevatorPrint(Elev);
+    Elev.Print();
     
     switch(Elev.Behaviour){
     case elevator.EB_DoorOpen:
@@ -140,7 +140,7 @@ func Fsm_onDoorTimeout(door_timer *time.Timer){
     }
     
     fmt.Println("\nNew state:")
-    elevator.ElevatorPrint(Elev);
+    Elev.Print();
 }
 
 

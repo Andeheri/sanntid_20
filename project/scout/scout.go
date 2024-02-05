@@ -19,7 +19,7 @@ func uint64ToBytes(num uint64) []byte {
 
 func BroadcastInfo() {
 
-	bcastAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprint("10.22.75.255:", UDP_PORT))
+	bcastAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprint("10.100.23.255:", UDP_PORT))
 	if err != nil {
 		fmt.Println("Error resolving broadcast address:", err)
 		return
