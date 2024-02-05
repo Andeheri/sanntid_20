@@ -59,7 +59,7 @@ func Timer_timedOut(tim chan<- bool) bool{
             tim <- true
             Timer_stop()
         }
-        time.Sleep(time.Microsecond*3)
+        time.Sleep(time.Millisecond*3)
     }
 }
 

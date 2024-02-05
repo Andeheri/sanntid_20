@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"single/elevio"
 	"single/iodevice"
+	"time"
 )
 
 type ElevatorBehaviour int
@@ -34,7 +35,7 @@ type Elevator struct {
 }
 type Config struct{
 	ClearRequestVariant ClearRequestVariant
-	DoorOpenDuration_s float64            
+	DoorOpenDuration_s time.Duration           
 } 
 
 func Eb_toString(eb ElevatorBehaviour) string{
@@ -90,7 +91,7 @@ func Elevator_uninitialized() Elevator{
         Behaviour: EB_Idle,
         Config: Config {
             ClearRequestVariant: CV_All,
-            DoorOpenDuration_s: 3.0,
+            DoorOpenDuration_s: 3*time.Second,
         },
     }
 }
