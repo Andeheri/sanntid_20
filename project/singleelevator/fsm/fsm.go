@@ -15,6 +15,11 @@ var outputDevice iodevice.ElevOutputDevice
 
 func Fsm_init(){
     outputDevice = iodevice.Elevio_getOutputDevice()
+
+    // Code for fixing position between floors
+    outputDevice.MotorDirection(elevio.MD_Down);
+    Elev.Dirn = elevio.MD_Down;
+    Elev.Behaviour = elevator.EB_Moving;
 }
 
 func SetAllLights(es elevator.Elevator){
@@ -23,12 +28,6 @@ func SetAllLights(es elevator.Elevator){
             outputDevice.RequestButtonLight(btn, floor, es.Requests[floor][btn]!=0);
         }
     }
-}
-
-func Fsm_onInitBetweenFloors(){
-    outputDevice.MotorDirection(elevio.MD_Down);
-    Elev.Dirn = elevio.MD_Down;
-    Elev.Behaviour = elevator.EB_Moving;
 }
 
 
@@ -114,8 +113,12 @@ func Fsm_onDoorTimeout(door_timer *time.Timer){
     
     Elev.Print();
     
-    switch(Elev.Behaviour){
-    case elevator.EB_DoorOpen:
+    if (Elev.Behaviour == elevator.EB_DoorOpen){
+
+        if (Elev.Obstructed){
+            door_timer.Reset(Elev.Config.DoorOpenDuration_s)
+            return
+        }
         pair := requests.Requests_chooseDirection(Elev);
         Elev.Dirn = pair.Dirn;
         Elev.Behaviour = pair.Behaviour;
@@ -135,12 +138,14 @@ func Fsm_onDoorTimeout(door_timer *time.Timer){
             outputDevice.DoorLight(false);
             outputDevice.MotorDirection(elevio.MotorDirection(Elev.Dirn));
         }
-        
-    default:
     }
     
     fmt.Println("\nNew state:")
     Elev.Print();
+}
+
+func OnObstruction(is_obstructed bool){
+    Elev.Obstructed = is_obstructed
 }
 
 
