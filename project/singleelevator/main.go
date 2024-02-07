@@ -21,7 +21,6 @@ func main(){
     drv_buttons := make(chan elevio.ButtonEvent)
     drv_floors  := make(chan int)
     drv_obstr   := make(chan bool)
-    drv_stop    := make(chan bool)  
 
     door_timer := time.NewTimer(-1)
 
@@ -29,7 +28,6 @@ func main(){
     go elevio.PollButtons(drv_buttons)
     go elevio.PollFloorSensor(drv_floors)
     go elevio.PollObstructionSwitch(drv_obstr)
-    go elevio.PollStopButton(drv_stop)
 
     fsm.Fsm_init()
 
@@ -46,14 +44,7 @@ func main(){
         case a := <- drv_obstr:
             fmt.Printf("%+v\n", a)
             fsm.OnObstruction(a)
-            
-        case a := <- drv_stop:
-            fmt.Printf("%+v\n", a)
-            for f := 0; f < numFloors; f++ {
-                for b := elevio.ButtonType(0); b < 3; b++ {
-                    elevio.SetButtonLamp(b, f, false)
-                }
-            }
+
         case a := <- door_timer.C:
             fmt.Printf("%+v\n", a)
             fsm.Fsm_onDoorTimeout(door_timer)
