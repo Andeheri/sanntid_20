@@ -20,7 +20,7 @@ func setElevatorRole(elevator_role *role){
 
 func main() {
 	var elevator_role role = unknown
-	//var udp_port string = "1861"  // Civil war
+	// var master_port string = "1861"  // Civil war
 
 	setElevatorRole(&elevator_role)
 
