@@ -10,3 +10,6 @@
 [submodule "project/Project-resources"]
 	path = project/Project-resources
 	url = https://github.com/TTK4145/Project-resources.git
+[submodule "project/Network-go"]
+	path = project/Network-go
+	url = https://github.com/TTK4145/Network-go.git
