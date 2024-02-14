@@ -133,16 +133,28 @@ func Requests_clearAtCurrentFloor(e elevator.Elevator) elevator.Elevator{
             e.Requests[e.Floor][elevio.BT_HallDown] = 0;
 
             
-        case elevio.MD_Stop:
+        case elevio.MD_Stop: //could alternatively remove this case (it is same as default)
+            e.Requests[e.Floor][elevio.BT_HallUp] = 0;
+            e.Requests[e.Floor][elevio.BT_HallDown] = 0;
         default:
             e.Requests[e.Floor][elevio.BT_HallUp] = 0;
             e.Requests[e.Floor][elevio.BT_HallDown] = 0;
-
         }
  
     default:
 
     }    
+    return e
+}
+
+
+// clear all requests when receiving restructured list of orders from master.?
+func Requests_clearAll(e elevator.Elevator) elevator.Elevator{
+    for btn := 0; btn < iodevice.N_BUTTONS; btn++{
+        for floor := 0; floor < iodevice.N_FLOORS; floor++{
+            e.Requests[e.Floor][btn] = 0
+        }    
+    }  
     return e
 }
 

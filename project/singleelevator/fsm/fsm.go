@@ -38,7 +38,6 @@ func Fsm_onRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_ti
     switch(Elev.Behaviour){
     case elevator.EB_DoorOpen:
         if requests.Requests_shouldClearImmediately(Elev, btn_floor, btn_type){
-            //timer.Timer_start(elev.Config.DoorOpenDuration_s);
             door_timer.Reset(Elev.Config.DoorOpenDuration_s)
         } else {
             Elev.Requests[btn_floor][btn_type] = 1;
@@ -57,7 +56,6 @@ func Fsm_onRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_ti
         switch(pair.Behaviour){
         case elevator.EB_DoorOpen:
             outputDevice.DoorLight(true);
-            //timer.Timer_start(elev.Config.DoorOpenDuration_s);
             door_timer.Reset(Elev.Config.DoorOpenDuration_s)
             Elev = requests.Requests_clearAtCurrentFloor(Elev);
         case elevator.EB_Moving:
@@ -92,7 +90,6 @@ func Fsm_onFloorArrival(newFloor int, door_timer *time.Timer){
             outputDevice.MotorDirection(elevio.MD_Stop);
             outputDevice.DoorLight(true);
             Elev = requests.Requests_clearAtCurrentFloor(Elev);
-            //timer.Timer_start(elev.Config.DoorOpenDuration_s);
             door_timer.Reset(Elev.Config.DoorOpenDuration_s)
             fmt.Println(Elev.Config.DoorOpenDuration_s)
             SetAllLights(Elev);
@@ -125,7 +122,6 @@ func Fsm_onDoorTimeout(door_timer *time.Timer){
         
         switch(Elev.Behaviour){
         case elevator.EB_DoorOpen:
-            //timer.Timer_start(elev.Config.DoorOpenDuration_s);
             door_timer.Reset(Elev.Config.DoorOpenDuration_s)
             Elev = requests.Requests_clearAtCurrentFloor(Elev);
             SetAllLights(Elev);
