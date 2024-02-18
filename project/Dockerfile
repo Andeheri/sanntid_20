@@ -32,6 +32,6 @@ RUN chmod +x simulator
 
 # Add the source code
 COPY . .
-RUN go build -o app .
+RUN go build -o app main.go
 
 CMD [ "./start.sh" ]
