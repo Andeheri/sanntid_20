@@ -1,3 +1,8 @@
+#build container with 
+#   docker build -t elevator .
+
+#run container with 
+#   docker run -it --rm elevator
 
 FROM golang:1.20
 
@@ -28,6 +33,5 @@ RUN chmod +x simulator
 # Add the source code
 COPY . .
 RUN go build -o app .
-RUN ./simulator &> /dev/null &
 
 CMD [ "./start.sh" ]
