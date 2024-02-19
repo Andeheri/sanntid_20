@@ -2,8 +2,10 @@ package main
 
 import (
 	"elevator/scout"
+	"elevator/udp_commands"
 	. "fmt"
 	"strings"
+	"udp_commands"
 )
 
 type role string
@@ -26,7 +28,10 @@ func setElevatorRole(elevator_role *role){
 
 func main() {
 	var elevator_role role = unknown
-	var IP_address string = scout.LocalIP()
+	// IP_address, err := scout.LocalIP()
+	// if (err != nil){
+	// 	Printf("Error when getting local IP:\n%s\n", err)
+	// }
 	// var master_port string = "1861"  // Civil war
 
 	send_udp_channel    := make(chan string)
@@ -35,7 +40,7 @@ func main() {
 	go scout.BroadcastInfo(send_udp_channel)
 	go scout.ListenForInfo(recieve_udp_channel)
 
-	send_udp_channel <- master_slave_election
+	send_udp_channel <- master_slave_election  // Starts master-slave election
 
 	setElevatorRole(&elevator_role)
 
@@ -50,6 +55,7 @@ func main() {
 
 			if (message == master_slave_election){
 				// Compare IP-addresses
+				udp_commands.MasterSlaveElection(&elevator_role)
 			}
 	}
 }
