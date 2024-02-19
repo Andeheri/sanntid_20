@@ -2,10 +2,10 @@ package fsm
 
 import (
 	"fmt"
-	"single/elevator"
-	"single/elevio"
-	"single/iodevice"
-	"single/requests"
+	"slave/elevator"
+	"slave/elevio"
+	"slave/iodevice"
+	"slave/requests"
 	"time"
 )
 
