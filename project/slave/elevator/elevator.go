@@ -3,8 +3,8 @@ package elevator
 import (
 	// "single/elevio"
 	"fmt"
-	"single/elevio"
-	"single/iodevice"
+	"slave/elevio"
+	"slave/iodevice"
 	"time"
 )
 
