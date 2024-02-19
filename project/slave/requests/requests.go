@@ -1,9 +1,9 @@
 package requests
 
 import(
-	"single/elevator"
-	"single/iodevice"
-	"single/elevio"
+	"slave/elevator"
+	"slave/iodevice"
+	"slave/elevio"
 )
 
 type DirnBehaviourPair struct{
