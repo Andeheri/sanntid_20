@@ -2,19 +2,10 @@ package main
 
 import (
 	"elevator/scout"
-	"elevator/udp_commands"
+	//"elevator/udp_commands"
 	. "fmt"
-	"strings"
-	"udp_commands"
-)
-
-type role string
-
-// Master-slave states
-const (
-	master  role = "master"
-	slave   role = "slave"
-	unknown role = "unknown"
+	//"strings"
+	. "elevator/elevator_constants"
 )
 
 // Commands
@@ -22,12 +13,12 @@ const (
 	master_slave_election string = "master_slave_election"
 )
 
-func setElevatorRole(elevator_role *role){
-	*elevator_role = unknown
+func setElevatorRole(elevator_role *Role){
+	*elevator_role = Unknown
 }
 
 func main() {
-	var elevator_role role = unknown
+	var elevator_role Role = Unknown
 	// IP_address, err := scout.LocalIP()
 	// if (err != nil){
 	// 	Printf("Error when getting local IP:\n%s\n", err)
@@ -50,12 +41,13 @@ func main() {
 		case recieved_message := <- recieve_udp_channel:
 			Printf("%s\n", recieved_message)
 
-			splitted_string := strings.Split(recieved_message, ": ")
-			IP_Addr_sender, message := splitted_string[0], splitted_string[1]
+			// splitted_string := strings.Split(recieved_message, ": ")
+			// _, message := splitted_string[0], splitted_string[1]
+			
 
-			if (message == master_slave_election){
-				// Compare IP-addresses
-				udp_commands.MasterSlaveElection(&elevator_role)
-			}
+			// if (message == master_slave_election){
+			// 	// Compare IP-addresses
+			// 	//udp_commands.MasterSlaveElection(&elevator_role)
+			// }
 	}
 }
