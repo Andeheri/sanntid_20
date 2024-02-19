@@ -101,7 +101,7 @@ func Requests_shouldClearImmediately(e elevator.Elevator, btn_floor int, btn_typ
     case elevator.CV_All:
         return e.Floor == btn_floor
     case elevator.CV_InDirn:
-        return e.Floor == btn_floor && e.Dirn == elevio.MD_Up && btn_type == elevio.BT_HallUp || e.Dirn == elevio.MD_Down && btn_type == elevio.BT_HallDown || e.Dirn == elevio.MD_Stop || btn_type == elevio.BT_Cab
+        return e.Floor == btn_floor && (e.Dirn == elevio.MD_Up && btn_type == elevio.BT_HallUp || e.Dirn == elevio.MD_Down && btn_type == elevio.BT_HallDown || e.Dirn == elevio.MD_Stop || btn_type == elevio.BT_Cab)
     default:
         return false
     }
@@ -143,6 +143,24 @@ func Requests_clearAtCurrentFloor(e elevator.Elevator) elevator.Elevator{
     default:
 
     }    
+    return e
+}
+
+
+// clear all requests when receiving restructured list of orders from master.?
+func Requests_clearAll(e elevator.Elevator) elevator.Elevator{
+    for btn := 0; btn < iodevice.N_BUTTONS; btn++{
+        for floor := 0; floor < iodevice.N_FLOORS; floor++{
+            e.Requests[e.Floor][btn] = 0
+        }    
+    }  
+    return e
+}
+
+
+// call fsm button press for the restructured list of orders from master.?
+func Requests_setAll(e elevator.Elevator) elevator.Elevator{
+    //fsm on butonpress for loop
     return e
 }
 
