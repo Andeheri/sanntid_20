@@ -7,6 +7,8 @@ import (
 	"strings"
 	"syscall"
 	"os"
+	"time"
+	. "elevator/constants"
 )
 
 const (
@@ -52,20 +54,12 @@ func uint64ToBytes(num uint64) []byte {
 	return bytes
 }
 
-func BroadcastInfo(send_broadcast_channel <- chan string) {
+func BroadcastInfo(localAddr string, send_broadcast_channel <- chan string) {
 	bcastConn := DialBroadcastUDP(UDP_PORT)
 	defer bcastConn.Close()
 	addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", UDP_PORT))
 
-	localAddr, err := LocalIP()
-	if err != nil {
-		fmt.Println("Error finding local address:", err)
-		return
-	}
-
-	// Attempt to get broadcast port
-	// localConn := bcastConn.if ()LocalAddr().(*net.UDPAddr)  // For local testing (all units have same IP but different ports)
-	// addrString := fmt.Sprint(localAddr, ":", localConn.Port)
+	time.Sleep(250 * time.Millisecond) // To ensure the listen-thread also has a connection
 
 	for {
 		select{
@@ -76,26 +70,31 @@ func BroadcastInfo(send_broadcast_channel <- chan string) {
 }
 
 func ListenForInfo(recieve_broadcast_channel chan <- string) {
-	listenAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprint(":", UDP_PORT))
-	if err != nil {
-		fmt.Println("Error resolving listenAddr:", err)
-		return
-	}
+	const bufSize = 1024
 
-	listenConn, err := net.ListenUDP("udp4", listenAddr)
-	if err != nil {
-		fmt.Println("Error listening to listenAddr:", err)
-		return
-	}
-	defer listenConn.Close()
+	conn := DialBroadcastUDP(UDP_PORT)
+	defer conn.Close()
 
-	var recieved_message string
 	for {
-		buff := make([]byte, 1024)
-		listenConn.ReadFromUDP(buff)  // Dumps recieved message into buff
-
-		recieved_message = string(buff)
-		recieve_broadcast_channel <- recieved_message
+		buff := make([]byte, bufSize)
+		_, _, e := conn.ReadFrom(buff)
+		if e != nil {
+			fmt.Printf("Error when recieving with UDP on port %d: \"%+v\"\n", UDP_PORT, e)
+		}else{
+			recieved_message := string(buff)
+			recieve_broadcast_channel <- recieved_message
+		}
 	}
+}
 
+func SendKeepAliveMessage(local_IP string, delta_t time.Duration){
+	// Sends keep-alive messages, updating all elevators that it is active, and maybe trigger a reelection of master
+	bcastConn := DialBroadcastUDP(UDP_PORT)
+	defer bcastConn.Close()
+	addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", UDP_PORT))
+
+	for {
+		bcastConn.WriteTo([]byte(local_IP + ": " + Keep_alive), addr)
+		time.Sleep(delta_t)
+	}
 }
