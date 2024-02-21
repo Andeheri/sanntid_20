@@ -5,14 +5,14 @@ import (
 	"slave/elevio"
 	"slave/fsm"
 	"slave/mastercom"
-	"slave/testclear"
+	// "slave/testclear"
 	"time"
 	"slave/iodevice"
 )
 
 func main() {
 	numFloors := 4
-	var master_req = [4][3]int{{0,0,1},{1,1,0},{1,0,1},{0,0,1}}
+	// var master_req = [4][3]int{{0,0,1},{1,1,0},{1,0,1},{0,0,1}}
 
 	elevio.Init("localhost:15657", numFloors)
 
@@ -21,12 +21,12 @@ func main() {
 	drv_obstr := make(chan bool)
 
 	door_timer := time.NewTimer(-1)
-	master_test := make(chan bool)
+	// master_test := make(chan bool)
 
 	go elevio.PollButtons(drv_buttons)
 	go elevio.PollFloorSensor(drv_floors)
 	go elevio.PollObstructionSwitch(drv_obstr)
-	go testclear.Set_master_test(master_test)
+	// go testclear.Set_master_test(master_test)
 
 
 	button_press := make(chan elevio.ButtonEvent)
@@ -47,7 +47,8 @@ func main() {
 		select {
 		case a := <-drv_buttons:
 			fmt.Printf("%+v\n", a)
-			fsm.Fsm_onRequestButtonPress(a.Floor, a.Button, door_timer)
+			// fsm.Fsm_onRequestButtonPress(a.Floor, a.Button, door_timer)
+			master_chans.Button_press <- a
 
 		case a := <-drv_floors:
 			fmt.Printf("%+v\n", a)
@@ -62,10 +63,10 @@ func main() {
 			fsm.Fsm_onDoorTimeout(door_timer)
 
 		//test for clearing and setting new requests from master
-		case a := <-master_test:
-			fmt.Printf("%+v\n", a)
-			fsm.Requests_clearAll()
-			fsm.Requests_setAll(master_req, door_timer)
+		// case a := <-master_test:
+		// 	fmt.Printf("%+v\n", a)
+		// 	fsm.Requests_clearAll()
+		// 	fsm.Requests_setAll(master_req, door_timer)
 		}
 	}
 }
