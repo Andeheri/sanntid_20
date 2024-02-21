@@ -1,7 +1,7 @@
 package iodevice
 
 import (
-	"single/elevio"
+	"slave/elevio"
 )
 
 const N_FLOORS = 4

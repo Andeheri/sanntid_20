@@ -1,0 +1,7 @@
+services:
+  elevator:
+    image: elevator
+    tty: true
+    deploy:
+      mode: replicated
+      replicas: 3
