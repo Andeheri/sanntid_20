@@ -31,6 +31,7 @@ type Elevator struct {
 	Obstructed bool
 	Door_timer time.Timer
     Requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
+	All_lights[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
     Behaviour ElevatorBehaviour
 	Config Config 
 }

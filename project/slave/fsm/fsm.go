@@ -25,7 +25,7 @@ func Fsm_init(){
 func SetAllLights(es elevator.Elevator){
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
         for btn := elevio.ButtonType(0); btn < iodevice.N_BUTTONS; btn++{
-            outputDevice.RequestButtonLight(btn, floor, es.Requests[floor][btn]!=0);
+            outputDevice.RequestButtonLight(btn, floor, es.All_lights[floor][btn]!=0);
         }
     }
 }
