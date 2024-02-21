@@ -5,10 +5,12 @@ import (
 	"slave/elevio"
 	"slave/fsm"
 	"time"
+	"slave/testclear"
 )
 
 func main() {
 	numFloors := 4
+	var master_requests = [4][3]int{{0,0,1},{1,1,0},{1,0,1},{0,0,1}}
 
 	elevio.Init("localhost:15657", numFloors)
 
@@ -17,10 +19,12 @@ func main() {
 	drv_obstr := make(chan bool)
 
 	door_timer := time.NewTimer(-1)
+	master_test := make(chan bool)
 
 	go elevio.PollButtons(drv_buttons)
 	go elevio.PollFloorSensor(drv_floors)
 	go elevio.PollObstructionSwitch(drv_obstr)
+	go testclear.Set_master_test(master_test)
 
 	fsm.Fsm_init()
 
@@ -41,6 +45,12 @@ func main() {
 		case a := <-door_timer.C:
 			fmt.Printf("%+v\n", a)
 			fsm.Fsm_onDoorTimeout(door_timer)
+
+		case a := <-master_test:
+			fmt.Printf("%+v\n", a)
+			fsm.Requests_clearAll()
+			fsm.Requests_setAll(master_requests, door_timer)
 		}
+	
 	}
 }

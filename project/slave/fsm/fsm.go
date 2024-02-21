@@ -145,6 +145,29 @@ func OnObstruction(is_obstructed bool){
 }
 
 
+// clear all requests when receiving restructured list of orders from master.?
+func Requests_clearAll(){
+    for btn := 0; btn < iodevice.N_BUTTONS; btn++{
+        for floor := 0; floor < iodevice.N_FLOORS; floor++{
+            Elev.Requests[floor][btn] = 0
+        }    
+    }  
+    //clear some timers?
+}
+
+// call fsm button press for the restructured list of orders from master.?
+func Requests_setAll(master_requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int, door_timer *time.Timer) {
+    //fsm on butonpress for loop
+    for btn := 0; btn < iodevice.N_BUTTONS; btn++{
+        for floor := 0; floor < iodevice.N_FLOORS; floor++{
+            if master_requests[floor][btn] == 1 {
+                Fsm_onRequestButtonPress(floor, elevio.ButtonType(btn), door_timer)
+            }
+        }    
+    }  
+}
+
+
 
 
 

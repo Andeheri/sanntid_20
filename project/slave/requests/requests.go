@@ -1,9 +1,9 @@
 package requests
 
-import(
+import (
 	"slave/elevator"
-	"slave/iodevice"
 	"slave/elevio"
+	"slave/iodevice"
 )
 
 type DirnBehaviourPair struct{
@@ -147,22 +147,10 @@ func Requests_clearAtCurrentFloor(e elevator.Elevator) elevator.Elevator{
 }
 
 
-// clear all requests when receiving restructured list of orders from master.?
-func Requests_clearAll(e elevator.Elevator) elevator.Elevator{
-    for btn := 0; btn < iodevice.N_BUTTONS; btn++{
-        for floor := 0; floor < iodevice.N_FLOORS; floor++{
-            e.Requests[e.Floor][btn] = 0
-        }    
-    }  
-    return e
-}
 
 
-// call fsm button press for the restructured list of orders from master.?
-func Requests_setAll(e elevator.Elevator) elevator.Elevator{
-    //fsm on butonpress for loop
-    return e
-}
+
+
 
 
 
