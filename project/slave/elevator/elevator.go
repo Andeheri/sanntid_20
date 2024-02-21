@@ -1,7 +1,6 @@
 package elevator
 
 import (
-	// "single/elevio"
 	"fmt"
 	"slave/elevio"
 	"slave/iodevice"
@@ -81,7 +80,7 @@ func Elevator_uninitialized() Elevator{
 		Door_timer: *time.NewTimer(-1),
         Behaviour: EB_Idle,
         Config: Config {
-            ClearRequestVariant: CV_All,
+            ClearRequestVariant: CV_InDirn,
             DoorOpenDuration_s: 3*time.Second,
         },
     }
