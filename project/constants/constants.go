@@ -12,5 +12,9 @@ const (
 // UDP commands
 const (
 	Master_slave_election string = "master_slave_election"
-	Keep_alive string            = "keep_alive"
+	Keep_alive            string = "keep_alive"
+)
+
+const (
+	UDP_PORT = 23456
 )
