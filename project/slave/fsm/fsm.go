@@ -165,8 +165,22 @@ func Requests_setAll(master_requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int,
             }
         }    
     }  
+    SetAllLights(Elev)//må søre for at ekstra lys er satt
 }
 
+
+func GetCabRequests()[]bool{
+    cabRequests := make([]bool,iodevice.N_FLOORS)
+    var btn elevio.ButtonType = elevio.BT_Cab
+    for floor := 0; floor < iodevice.N_FLOORS; floor++{
+        if Elev.Requests[floor][btn] == 1 {
+            cabRequests[floor] = true
+        } else{
+            cabRequests[floor] = false
+        }
+    }    
+    return cabRequests
+}
 
 
 

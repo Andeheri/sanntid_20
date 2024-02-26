@@ -22,8 +22,20 @@ const (
 	MD_Stop                = 0
 )
 
-type ButtonType int
+func Elevio_dirn_toString(d MotorDirection) string{
+	switch d{
+	case MD_Up:
+		return "up"
+	case MD_Down:
+		return "down"
+	case MD_Stop:
+		return "stop"
+	default:
+		return "undefined"
+	}
+}
 
+type ButtonType int
 const (
 	BT_HallUp   ButtonType = 0
 	BT_HallDown            = 1
