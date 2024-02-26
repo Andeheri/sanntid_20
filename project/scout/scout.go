@@ -1,17 +1,16 @@
 package scout
 
 import (
+	"bytes"
 	. "elevator/constants"
 	"elevator/scout/conn"
 	"fmt"
 	"net"
 	"strings"
 	"time"
-	"bytes"
 )
 
 var localIP string
-
 
 func LocalIP() (string, error) {
 	if localIP == "" {
@@ -25,7 +24,6 @@ func LocalIP() (string, error) {
 	return localIP, nil
 }
 
-
 func BroadcastInfo(localAddr string, send_broadcast_channel <-chan string) {
 	bcastConn := conn.DialBroadcastUDP(UDP_PORT)
 	defer bcastConn.Close()
@@ -33,7 +31,7 @@ func BroadcastInfo(localAddr string, send_broadcast_channel <-chan string) {
 
 	time.Sleep(250 * time.Millisecond) // To ensure the listen-thread also has a connection
 
-	for broadcast_message := range send_broadcast_channel{
+	for broadcast_message := range send_broadcast_channel {
 		bcastConn.WriteTo([]byte(localAddr+": "+broadcast_message), addr)
 	}
 }
@@ -74,5 +72,43 @@ func SendKeepAliveMessage(local_IP string, delta_t time.Duration) {
 	for {
 		bcastConn.WriteTo([]byte(local_IP+": "+Keep_alive), addr)
 		time.Sleep(delta_t)
+	}
+}
+
+func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, keep_alive_recieve_channel <-chan string, keep_alive_transmit_channel chan<- string) {
+	knownMap := make(map[string]int)
+	aliveMap := make(map[string]struct{})
+	for {
+		select {
+		case ip_addr := <-keep_alive_recieve_channel:
+			aliveMap[ip_addr] = struct{}{}
+			knownMap[ip_addr] = num_keep_alive
+		default:
+			for ip := range aliveMap {
+				fmt.Printf("Alive: %s\n", ip)
+			}
+			// Compute the difference.
+			not_responding := []string{}
+			for ip := range knownMap {
+				fmt.Printf("Known: %s\n", ip)
+				if _, found := aliveMap[ip]; !found {
+					knownMap[ip] -= 1
+					fmt.Printf("%s not responding\nknownmap: %d\n", ip, knownMap[ip])
+					if knownMap[ip] == 0 {
+						not_responding = append(not_responding, ip)
+					}
+				}
+			}
+
+			for _, not_responded := range not_responding {
+				keep_alive_transmit_channel <- not_responded
+			}
+
+			// Clear the aliveMap by deleting all keys:
+			for key := range aliveMap {
+				delete(aliveMap, key)
+			}
+			time.Sleep(delta_t) // Twice because Nyquist sampling theorem
+		}
 	}
 }
