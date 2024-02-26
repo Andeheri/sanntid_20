@@ -16,6 +16,8 @@ type Master_channels struct {
 	Master_requests chan [iodevice.N_FLOORS][iodevice.N_BUTTONS] int
 	RequestedState chan bool
 
+	Log chan bool
+
 	
 }
 
@@ -32,14 +34,15 @@ func Master_communication(chans Master_channels, door_timer *time.Timer){
 			fmt.Println(a, "sender clear request melding")
 			//send message over TCP
 		case a := <- chans.Master_requests:
-			fmt.Println(a, "mottat master request meldin g")
+			fmt.Println(a, "mottat master request melding")
 			//mottatt melding over TCP
 			fsm.Requests_clearAll()
 			fsm.Requests_setAll(a, door_timer)
-		
 		case a := <- chans.RequestedState:
 			fmt.Println(a, "sender state til master")
 			SendState()
+		case a := <- chans.Log:
+			fmt.Println(a, "lagrer data fra master")
 		}	
 	}
 }
