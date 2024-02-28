@@ -16,11 +16,35 @@ func IPToNum(ip_address string) int {
 	return ip_as_num
 }
 
-func MasterSlaveElection(local_IP string, role_channel chan<- Role, filtered_udp_recieve_channel <-chan map[string]int) {
+func MasterSlaveElection(local_IP string, mse_channel chan<- MSE_type, filtered_udp_recieve_channel <-chan map[string]struct{}) {
+	var highest_ip_int int
+	var highest_ip_string string
+	last_highest_ip := ""
+	last_role := Unknown
+
 	for ip_address_map := range filtered_udp_recieve_channel {
-		Printf("Master slave election:\n")
+		// Possibly need to update role or master to connect to
+		highest_ip_string = local_IP
+		highest_ip_int = IPToNum(local_IP)
 		for ip_address := range ip_address_map {
-			Printf("%d\n", IPToNum(ip_address))
+			ip_address_int := IPToNum(ip_address)
+			if (ip_address_int > highest_ip_int){
+				highest_ip_string = ip_address
+				highest_ip_int = ip_address_int
+			}
+		}
+		if (highest_ip_string != last_highest_ip){
+			role := Unknown
+			if (highest_ip_string == local_IP){
+				role = Master
+			}else{
+				role = Slave
+			}
+			if (last_role != role || last_highest_ip != highest_ip_string){
+				last_role = role
+				last_highest_ip = highest_ip_string
+				mse_channel <- MSE_type{Role: role, IP: highest_ip_string}
+			}
 		}
 	}
 }

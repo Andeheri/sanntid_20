@@ -15,6 +15,11 @@ const (
 	Keep_alive            string = "keep_alive"
 )
 
+type MSE_type struct {
+	Role  Role
+	IP string
+}
+
 const (
 	UDP_PORT = 23456
 )

@@ -21,7 +21,7 @@ func main() {
 	num_keep_alive := 5 // Number of missed keep-alive messages missed before assumed offline
 
 	var elevator_role Role = Unknown
-	ip_address_map := make(map[string]int)
+	ip_address_map := make(map[string]struct{})
 
 	Printf("Starting elevator ...\n\n")
 
@@ -36,8 +36,8 @@ func main() {
 	// Channels
 	send_udp_channel               := make(chan string)
 	recieve_udp_channel            := make(chan string)
-	mse_filtered_udp_channel       := make(chan map[string] int)
-	role_channel                   := make(chan Role)
+	mse_filtered_udp_channel       := make(chan map[string]struct{})
+	mse_channel                    := make(chan MSE_type)
 	keep_alive_tracker_reciever    := make(chan string)
 	keep_alive_tracker_transmitter := make(chan string)
 
@@ -48,7 +48,7 @@ func main() {
 	go scout.TrackMissedKeepAliveMessages(delta_t_missed_keep_alive, num_keep_alive, keep_alive_tracker_reciever, keep_alive_tracker_transmitter)
 
 	// Master-slave election
-	go udp_commands.MasterSlaveElection(local_IP, role_channel, mse_filtered_udp_channel)
+	go udp_commands.MasterSlaveElection(local_IP, mse_channel, mse_filtered_udp_channel)
 
 	setElevatorRole(&elevator_role)
 
@@ -72,20 +72,23 @@ func main() {
 						keep_alive_tracker_reciever <- IP_Addr_sender
 
 						_, exists := ip_address_map[IP_Addr_sender]
-						ip_address_map[IP_Addr_sender] = num_keep_alive
+						ip_address_map[IP_Addr_sender] = struct{}{}
 						if (!exists){  // If it is a new elevator
 							Println("Current IP-adress list:", ip_address_map)
-							udp_commands.SendMapToChannel[string, int](ip_address_map, mse_filtered_udp_channel)
+							udp_commands.SendMapToChannel[string, struct{}](ip_address_map, mse_filtered_udp_channel)
 						}
 					}
 				}
-			case elevator_role = <- role_channel:
-				Printf("Current role: %s\n", elevator_role)
-				// Do something based on it being slave or master
+			case mse_data := <- mse_channel:
+				// Data recieved from Master Slave Election
+				elevator_role = mse_data.Role
+				highest_ip := mse_data.IP
+				Printf("Current role: %s\nCurrent highest IP: %s\n\n", elevator_role, highest_ip)
+
 			case not_alive_ip_address := <- keep_alive_tracker_transmitter:
 				delete(ip_address_map, not_alive_ip_address)
 				Println("Current IP-adress list:", ip_address_map)
-				udp_commands.SendMapToChannel[string, int](ip_address_map, mse_filtered_udp_channel)
+				udp_commands.SendMapToChannel[string, struct{}](ip_address_map, mse_filtered_udp_channel)
 		}
 	}
 }
