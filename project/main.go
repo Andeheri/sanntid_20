@@ -16,7 +16,7 @@ func setElevatorRole(elevator_role *Role) {
 func main() {
 	// Variables
 	// var master_port string = "1861"  // Civil war
-	delta_t_keep_alive := 100 * time.Millisecond
+	delta_t_keep_alive := 500 * time.Millisecond
 	delta_t_missed_keep_alive := 1000 * time.Millisecond
 	num_keep_alive := 5 // Number of missed keep-alive messages missed before assumed offline
 

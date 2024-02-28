@@ -75,40 +75,50 @@ func SendKeepAliveMessage(local_IP string, delta_t time.Duration) {
 	}
 }
 
-func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, keep_alive_recieve_channel <-chan string, keep_alive_transmit_channel chan<- string) {
+func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, keep_alive_receive_channel <-chan string, keep_alive_transmit_channel chan<- string) {
 	knownMap := make(map[string]int)
 	aliveMap := make(map[string]struct{})
+	timer := time.NewTicker(delta_t)
+	defer timer.Stop()
+
 	for {
 		select {
-		case ip_addr := <-keep_alive_recieve_channel:
+		case ip_addr := <-keep_alive_receive_channel:
+			// Received keep alive message
 			aliveMap[ip_addr] = struct{}{}
 			knownMap[ip_addr] = num_keep_alive
-		default:
+
+		case <-timer.C:
+			// Timer fired due to delta_t duration passing
 			for ip := range aliveMap {
 				fmt.Printf("Alive: %s\n", ip)
 			}
+
 			// Compute the difference.
 			not_responding := []string{}
-			for ip := range knownMap {
+			for ip, count := range knownMap {
 				fmt.Printf("Known: %s\n", ip)
 				if _, found := aliveMap[ip]; !found {
-					knownMap[ip] -= 1
-					fmt.Printf("%s not responding\nknownmap: %d\n", ip, knownMap[ip])
-					if knownMap[ip] == 0 {
+					count -= 1
+					knownMap[ip] = count
+					fmt.Printf("%s not responding\nknownmap: %d\n", ip, count)
+					if count <= 0 {
 						not_responding = append(not_responding, ip)
+						delete(knownMap, ip) // Remove from knownMap as it reached the limit
 					}
+				} else {
+					knownMap[ip] = num_keep_alive // Reset back to num_keep_alive since it's alive
 				}
 			}
 
-			for _, not_responded := range not_responding {
-				keep_alive_transmit_channel <- not_responded
+			for _, ip := range not_responding {
+				keep_alive_transmit_channel <- ip
 			}
 
-			// Clear the aliveMap by deleting all keys:
-			for key := range aliveMap {
-				delete(aliveMap, key)
+			// Clear the aliveMap for the next interval
+			for ip := range aliveMap {
+				delete(aliveMap, ip)
 			}
-			time.Sleep(delta_t) // Twice because Nyquist sampling theorem
 		}
 	}
 }
