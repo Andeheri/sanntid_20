@@ -3,24 +3,29 @@ package main
 import (
 	. "elevator/constants"
 	"elevator/scout"
-	"elevator/udp_commands"
+	"elevator/master_slave"
 	. "fmt"
 	"strings"
 	"time"
 )
 
-func setElevatorRole(elevator_role *Role) {
-	*elevator_role = Unknown
+func startMaster(master_port string, ip_address_map map[string]struct{}){
+	// Should set up TCP-connection to each ip in ip_address_map
+}
+
+func startSlave(master_port string, master_ip string){
+	// Should set up
 }
 
 func main() {
-	// Variables
-	// var master_port string = "1861"  // Civil war
-	delta_t_keep_alive := 100 * time.Millisecond
+	// Parameters
+	master_port               := "1861"  // Civil war
+	delta_t_keep_alive        := 100 * time.Millisecond
 	delta_t_missed_keep_alive := 50 * time.Millisecond
-	num_keep_alive := 5 // Number of missed keep-alive messages missed before assumed offline
+	num_keep_alive            := 5 // Number of missed keep-alive messages missed before assumed offline
 
-	var elevator_role Role = Unknown
+	// Variables
+	elevator_role := Unknown
 	ip_address_map := make(map[string]struct{})
 
 	Printf("Starting elevator ...\n\n")
@@ -48,9 +53,7 @@ func main() {
 	go scout.TrackMissedKeepAliveMessages(delta_t_missed_keep_alive, num_keep_alive, keep_alive_tracker_reciever, keep_alive_tracker_transmitter)
 
 	// Master-slave election
-	go udp_commands.MasterSlaveElection(local_IP, mse_channel, mse_filtered_udp_channel)
-
-	setElevatorRole(&elevator_role)
+	go master_slave.Election(local_IP, mse_channel, mse_filtered_udp_channel)
 
 	Printf("Elevator role: %s\n\n", elevator_role)
 
@@ -61,10 +64,6 @@ func main() {
 				IP_Addr_sender := splitted_string[0]
 				message := splitted_string[1]
 				//Printf("%s: %s\n", IP_Addr_sender, message)
-
-				if message == Master_slave_election {
-					// Send start-signal to master-slave election thread
-				}
 				if message == Keep_alive {
 					// Update IP-address-list and see if new master should be elected
 					if (IP_Addr_sender != local_IP){  // if elevator is not itself
@@ -75,20 +74,27 @@ func main() {
 						ip_address_map[IP_Addr_sender] = struct{}{}
 						if (!exists){  // If it is a new elevator
 							Println("Current IP-adress list:", ip_address_map)
-							udp_commands.SendMapToChannel[string, struct{}](ip_address_map, mse_filtered_udp_channel)
+							master_slave.SendMapToChannel[string, struct{}](ip_address_map, mse_filtered_udp_channel)
 						}
 					}
 				}
 			case mse_data := <- mse_channel:
 				// Data recieved from Master Slave Election
 				elevator_role = mse_data.Role
-				highest_ip := mse_data.IP
-				Printf("Current role: %s\nCurrent highest IP: %s\n\n", elevator_role, highest_ip)
+				master_ip := mse_data.IP
+				Printf("Elevator role: %s\nMaster IP: %s\n\n", elevator_role, master_ip)
+				if (elevator_role == Master){
+					// Start master protocol
+					startMaster(master_port, ip_address_map)
+				}else if (elevator_role == Slave){
+					// Start slave protocol
+					startSlave(master_port, master_ip)
+				}
 
 			case not_alive_ip_address := <- keep_alive_tracker_transmitter:
 				delete(ip_address_map, not_alive_ip_address)
 				Println("Current IP-adress list:", ip_address_map)
-				udp_commands.SendMapToChannel[string, struct{}](ip_address_map, mse_filtered_udp_channel)
+				master_slave.SendMapToChannel[string, struct{}](ip_address_map, mse_filtered_udp_channel)
 		}
 	}
 }

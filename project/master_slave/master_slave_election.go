@@ -1,4 +1,4 @@
-package udp_commands
+package master_slave
 
 import (
 	. "elevator/constants"
@@ -16,7 +16,7 @@ func IPToNum(ip_address string) int {
 	return ip_as_num
 }
 
-func MasterSlaveElection(local_IP string, mse_channel chan<- MSE_type, filtered_udp_recieve_channel <-chan map[string]struct{}) {
+func Election(local_IP string, mse_channel chan<- MSE_type, filtered_udp_recieve_channel <-chan map[string]struct{}) {
 	var highest_ip_int int
 	var highest_ip_string string
 	last_highest_ip := ""

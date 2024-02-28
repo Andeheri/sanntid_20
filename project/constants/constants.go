@@ -11,8 +11,7 @@ const (
 
 // UDP commands
 const (
-	Master_slave_election string = "master_slave_election"
-	Keep_alive            string = "keep_alive"
+	Keep_alive string = "keep_alive"
 )
 
 type MSE_type struct {
