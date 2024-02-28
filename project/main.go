@@ -16,8 +16,8 @@ func setElevatorRole(elevator_role *Role) {
 func main() {
 	// Variables
 	// var master_port string = "1861"  // Civil war
-	delta_t_keep_alive := 500 * time.Millisecond
-	delta_t_missed_keep_alive := 1000 * time.Millisecond
+	delta_t_keep_alive := 100 * time.Millisecond
+	delta_t_missed_keep_alive := 50 * time.Millisecond
 	num_keep_alive := 5 // Number of missed keep-alive messages missed before assumed offline
 
 	var elevator_role Role = Unknown
@@ -75,14 +75,7 @@ func main() {
 						ip_address_map[IP_Addr_sender] = num_keep_alive
 						if (!exists){  // If it is a new elevator
 							Println("Current IP-adress list:", ip_address_map)
-							// Create deep copy
-							ip_address_map_copy := make(map[string]int)
-							// Manually copy elements from the original map to the new map
-							for key, value := range ip_address_map {
-								ip_address_map_copy[key] = value
-							}
-							// Passes updated list to see if new master should be elected
-							mse_filtered_udp_channel <- ip_address_map_copy  
+							udp_commands.SendMapToChannel[string, int](ip_address_map, mse_filtered_udp_channel)
 						}
 					}
 				}
@@ -92,14 +85,7 @@ func main() {
 			case not_alive_ip_address := <- keep_alive_tracker_transmitter:
 				delete(ip_address_map, not_alive_ip_address)
 				Println("Current IP-adress list:", ip_address_map)
-				// Create deep copy
-				ip_address_map_copy := make(map[string]int)
-				// Manually copy elements from the original map to the new map
-				for key, value := range ip_address_map {
-					ip_address_map_copy[key] = value
-				}
-				// Passes updated list to see if new master should be elected
-				mse_filtered_udp_channel <- ip_address_map_copy 
+				udp_commands.SendMapToChannel[string, int](ip_address_map, mse_filtered_udp_channel)
 		}
 	}
 }

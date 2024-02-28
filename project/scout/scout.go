@@ -76,9 +76,9 @@ func SendKeepAliveMessage(local_IP string, delta_t time.Duration) {
 }
 
 func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, keep_alive_receive_channel <-chan string, keep_alive_transmit_channel chan<- string) {
-	knownMap := make(map[string]int)
-	aliveMap := make(map[string]struct{})
-	timer := time.NewTicker(delta_t)
+	knownMap := make(map[string]int) // Known IP-addresses with number keeping track of 'aliveness'
+	aliveMap := make(map[string]struct{})  // IP-addresses that sent keep-alive over UDP
+	timer := time.NewTicker(delta_t)  // Timer to check for keep-alive messages
 	defer timer.Stop()
 
 	for {
@@ -90,18 +90,12 @@ func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, kee
 
 		case <-timer.C:
 			// Timer fired due to delta_t duration passing
-			for ip := range aliveMap {
-				fmt.Printf("Alive: %s\n", ip)
-			}
-
 			// Compute the difference.
 			not_responding := []string{}
 			for ip, count := range knownMap {
-				fmt.Printf("Known: %s\n", ip)
 				if _, found := aliveMap[ip]; !found {
 					count -= 1
 					knownMap[ip] = count
-					fmt.Printf("%s not responding\nknownmap: %d\n", ip, count)
 					if count <= 0 {
 						not_responding = append(not_responding, ip)
 						delete(knownMap, ip) // Remove from knownMap as it reached the limit
@@ -112,7 +106,7 @@ func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, kee
 			}
 
 			for _, ip := range not_responding {
-				keep_alive_transmit_channel <- ip
+				keep_alive_transmit_channel <- ip  // Transmit dead IP's to main thread
 			}
 
 			// Clear the aliveMap for the next interval

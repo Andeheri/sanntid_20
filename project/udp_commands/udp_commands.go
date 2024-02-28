@@ -24,3 +24,14 @@ func MasterSlaveElection(local_IP string, role_channel chan<- Role, filtered_udp
 		}
 	}
 }
+
+func SendMapToChannel[K comparable, V any](current_map map[K]V, channel chan<- map[K]V){
+	// Create deep copy
+	map_copy := make(map[K]V)
+	// Manually copy elements from the original map to the new map
+	for key, value := range current_map {
+		map_copy[key] = value
+	}
+	// Passes updated list to see if new master should be elected
+	channel <- map_copy 
+}
