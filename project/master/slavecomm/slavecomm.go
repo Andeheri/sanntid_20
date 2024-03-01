@@ -3,8 +3,8 @@ package slavecomm
 import (
 	"encoding/json"
 	"fmt"
-	"master/community"
 	"net"
+	"project/master/community"
 )
 
 func Receiver(slaveConn *net.TCPConn, ch chan<- community.SlaveMessage) {
