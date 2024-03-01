@@ -1,22 +1,22 @@
 package main
 
 import (
-	"master/assigner"
-	"master/community"
 	"fmt"
+	"project/master/assigner"
+	"project/master/community"
 )
 
 func main() {
-	 input := community.CommunityState{
+	input := community.CommunityState{
 		HallRequests: [][2]bool{{false, false}, {true, false}, {false, false}, {false, true}},
 		States: map[string]community.ElevatorState{
-			"one": community.ElevatorState{
+			"one": {
 				Behavior:    "moving",
 				Floor:       2,
 				Direction:   "up",
 				CabRequests: []bool{false, false, false, true},
 			},
-			"two": community.ElevatorState{
+			"two": {
 				Behavior:    "idle",
 				Floor:       0,
 				Direction:   "stop",
