@@ -12,61 +12,69 @@ import (
 
 func main() {
 	numFloors := 4
-	// var master_req = [4][3]int{{0,0,1},{1,1,0},{1,0,1},{0,0,1}}
 
 	elevio.Init("localhost:15657", numFloors)
 
-	drv_buttons := make(chan elevio.ButtonEvent)
-	drv_floors := make(chan int)
-	drv_obstr := make(chan bool)
+	drvButtons := make(chan elevio.ButtonEvent)
+	drvFloors := make(chan int)
+	drvObstr := make(chan bool)
 
-	door_timer := time.NewTimer(-1)
-	// master_test := make(chan bool)
+	doorTimer := time.NewTimer(-1)
 
-	go elevio.PollButtons(drv_buttons)
-	go elevio.PollFloorSensor(drv_floors)
-	go elevio.PollObstructionSwitch(drv_obstr)
-	// go testclear.Set_master_test(master_test)
+
+	go elevio.PollButtons(drvButtons)
+	go elevio.PollFloorSensor(drvFloors)
+	go elevio.PollObstructionSwitch(drvObstr)
 
 
 	button_press := make(chan elevio.ButtonEvent)
 	clear_request := make(chan elevio.ButtonEvent)
 	master_requests := make(chan [iodevice.N_FLOORS][iodevice.N_BUTTONS] int)
+	requestedState := make(chan bool)
+	log := make(chan bool)
+	sender := make(chan interface{})
 
-	master_chans := mastercom.Master_channels{
-		Button_press: button_press,
-		Clear_request: clear_request,
-		Master_requests: master_requests,
+	masterChans := mastercom.Master_channels{
+		ButtonPress: button_press,
+		ClearRequest: clear_request,
+		MasterRequests: master_requests,
+		RequestedState: requestedState,
+		Log: log,
 	}
 
-	go mastercom.Master_communication(master_chans, door_timer)
+	go mastercom.Master_communication(&masterChans)
 
-	fsm.Fsm_init()
+	fsm.Init()
 
 	for {
 		select {
-		case a := <-drv_buttons:
+		case a := <-drvButtons:
 			fmt.Printf("%+v\n", a)
 			// fsm.Fsm_onRequestButtonPress(a.Floor, a.Button, door_timer)
-			master_chans.Button_press <- a
+			masterChans.ButtonPress <- a
 
-		case a := <-drv_floors:
+		case a := <-drvFloors:
 			fmt.Printf("%+v\n", a)
-			fsm.Fsm_onFloorArrival(a, door_timer)
+			fsm.OnFloorArrival(a, doorTimer, masterChans.ClearRequest)
 
-		case a := <-drv_obstr:
+		case a := <-drvObstr:
 			fmt.Printf("%+v\n", a)
 			fsm.OnObstruction(a)
 
-		case a := <-door_timer.C:
+		case a := <-doorTimer.C:
 			fmt.Printf("%+v\n", a)
-			fsm.Fsm_onDoorTimeout(door_timer)
+			fsm.OnDoorTimeout(doorTimer, masterChans.ClearRequest)
 
-		//test for clearing and setting new requests from master
-		// case a := <-master_test:
-		// 	fmt.Printf("%+v\n", a)
-		// 	fsm.Requests_clearAll()
-		// 	fsm.Requests_setAll(master_req, door_timer)
+
+		//moved these from mastercom.go as they are involved with current state
+		case a := <- masterChans.MasterRequests:
+			fmt.Println(a, "mottat master request melding")
+			fsm.Requests_clearAll()
+			fsm.Requests_setAll(a, doorTimer, masterChans.ClearRequest)
+			
+		case a := <- masterChans.RequestedState:
+			fmt.Println(a, "sender state til master")
+			mastercom.SendState(sender)
 		}
 	}
 }

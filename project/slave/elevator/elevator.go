@@ -73,7 +73,7 @@ func (es Elevator)Print(){
 }
 
 
-func Elevator_uninitialized() Elevator{
+func Initialize() Elevator{
     return Elevator{
         Floor: -1,
         Dirn: elevio.MD_Stop,

@@ -1,69 +1,96 @@
 package mastercom
 
-import(
+import (
+	"encoding/json"
 	"fmt"
+	"net"
+	"slave/community"
 	"slave/elevio"
-	"slave/iodevice"
 	"slave/fsm"
-	"time"
-	// "encoding/json"
+	"slave/iodevice"
 )
 
 type Master_channels struct {
-	Button_press chan elevio.ButtonEvent
-	Clear_request chan elevio.ButtonEvent
+	ButtonPress  chan elevio.ButtonEvent
+	ClearRequest chan elevio.ButtonEvent
 
-	Master_requests chan [iodevice.N_FLOORS][iodevice.N_BUTTONS] int
-	RequestedState chan bool
+	MasterRequests chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
+	RequestedState  chan bool
 
 	Log chan bool
 
-	
+	Sender chan json.Marshaler
 }
 
-
-
-func Master_communication(chans Master_channels, door_timer *time.Timer){
+func Master_communication(chans *Master_channels) {
 	for {
 		select {
-		case a := <- chans.Button_press:
+		case a := <-chans.ButtonPress:
 			fmt.Println(a, "sender button press melding")
 			//send message over TCP
-			//hvis det ikke er noen forbindelse "fsm on button press" direkte
-		case a := <- chans.Clear_request:
+		case a := <-chans.ClearRequest:
 			fmt.Println(a, "sender clear request melding")
 			//send message over TCP
-		case a := <- chans.Master_requests:
-			fmt.Println(a, "mottat master request melding")
-			//mottatt melding over TCP
-			fsm.Requests_clearAll()
-			fsm.Requests_setAll(a, door_timer)
-		case a := <- chans.RequestedState:
-			fmt.Println(a, "sender state til master")
-			SendState()
-		case a := <- chans.Log:
+		case a := <-chans.Log:
 			fmt.Println(a, "lagrer data fra master")
-		}	
+		}
 	}
 }
 
-type HRAElevState struct {
-    Behavior    string      `json:"behaviour"`
-    Floor       int         `json:"floor"` 
-    Direction   string      `json:"direction"`
-    CabRequests []bool      `json:"cabRequests"`
-}
-
-func SendState(){
-	state := HRAElevState{
-		Behavior: string(fsm.Elev.Behaviour),
-		Floor: fsm.Elev.Floor,
-		Direction: elevio.Elevio_dirn_toString(fsm.Elev.Dirn),
+func SendState(sender chan<- interface{}) {
+	state := community.ElevatorState{
+		Behavior:    string(fsm.Elev.Behaviour),
+		Floor:       fsm.Elev.Floor,
+		Direction:   elevio.Elevio_dirn_toString(fsm.Elev.Dirn),
 		CabRequests: fsm.GetCabRequests(),
 	}
-	
-	fmt.Println(state)
-	// jsonBytes, err := json.Marshal(state)
-	//send the state over tcp...
 
+	fmt.Println("Sender state", state)
+
+	sender <- state
+
+}
+
+func Receiver(masterConn *net.TCPConn, chans *Master_channels) {
+
+	buffer := make([]byte, 1024)
+
+	for {
+		// Read data from the master
+		n, err := masterConn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
+
+		var requests [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
+		var requestedState bool
+
+		if err = json.Unmarshal(buffer[:n], &requests); err == nil {
+			chans.MasterRequests <- requests
+		} else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
+			chans.RequestedState <- requestedState
+		} else {
+			fmt.Println("json.Unmarshal error (no matching data types) : ", err)
+			return
+		}
+	}
+
+}
+
+func Sender(masterConn *net.TCPConn, ch <-chan json.Marshaler) {
+	for {
+		data := <-ch
+		jsonBytes, err := json.Marshal(data)
+		if err != nil {
+			fmt.Println("json.Marshal error: ", err)
+			return
+		}
+
+		_, err = masterConn.Write(jsonBytes)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
+	}
 }

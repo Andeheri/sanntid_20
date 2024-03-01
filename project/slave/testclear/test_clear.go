@@ -11,3 +11,9 @@ func Set_master_test(receiver chan<- bool){
 		receiver <- true
 	}
 }
+
+		//test for clearing and setting new requests from master
+		// case a := <-master_test:
+		// 	fmt.Printf("%+v\n", a)
+		// 	fsm.Requests_clearAll()
+		// 	fsm.Requests_setAll(master_req, door_timer)
