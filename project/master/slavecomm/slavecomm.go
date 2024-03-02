@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"project/commontypes"
 	"reflect"
 	"time"
 )
@@ -29,11 +30,6 @@ type addSlaveRequest struct {
 }
 type removeSlaveRequest struct {
 	addr string
-}
-
-type tcpPackage struct {
-	Datatype  reflect.Type
-	jsonBytes []byte
 }
 
 var managerCh chan interface{}
@@ -86,7 +82,9 @@ func Manager() {
 		switch req := request.(type) {
 		case sendRequest:
 			addrToCh[req.msg.Addr] <- req.msg.Payload
+			fmt.Println("Sent to", req.msg.Addr)
 			req.errorCh <- nil
+			fmt.Println("Returned nil error")
 		case getSlavesRequest:
 			slaves := make([]string, 0, len(addrToCh))
 			for addr := range addrToCh {
@@ -103,7 +101,7 @@ func Manager() {
 	}
 }
 
-func Listener(port int, fromSlaveCh chan<- interface{}) {
+func Listener(port int, fromSlaveCh chan SlaveMessage) {
 
 	localAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -131,7 +129,7 @@ func Listener(port int, fromSlaveCh chan<- interface{}) {
 
 }
 
-func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- interface{}) {
+func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 
 	fmt.Println("Connected to", slaveConn.RemoteAddr().String())
 
@@ -142,6 +140,8 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- interface{}) {
 	toSlaveCh := make(chan interface{})
 
 	managerCh <- addSlaveRequest{addr: slaveAddr, ch: toSlaveCh}
+
+	//TODO: request slave's hall requests
 
 	defer func() {
 		slaveConn.Close()
@@ -156,14 +156,15 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- interface{}) {
 			fmt.Println("Closing connection to", slaveConn.RemoteAddr().String())
 			return
 		case data := <-toSlaveCh:
+			fmt.Println("ready to send data to slave")
 			jsonBytesPayload, err := json.Marshal(data)
 			if err != nil {
 				fmt.Println("json.Marshal error: ", err)
 				continue
 			}
-			tcpPackage := tcpPackage{
-				Datatype:  reflect.TypeOf(data),
-				jsonBytes: jsonBytesPayload,
+			tcpPackage := commontypes.TypeTaggedJSON{
+				TypeId: reflect.TypeOf(data).String(),
+				JSON:   jsonBytesPayload,
 			}
 
 			jsonBytesPackage, err := json.Marshal(tcpPackage)
@@ -179,28 +180,45 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- interface{}) {
 				return
 			}
 		case msg := <-tcpReadCh:
-			var tcpPack tcpPackage
+			var ttj commontypes.TypeTaggedJSON
 
 			//this unmarshaling no work :(
-			err := json.Unmarshal(msg, &tcpPack)
-			if err != nil || tcpPack.Datatype == nil {
+			err := json.Unmarshal(msg, &ttj)
+			if err != nil {
 				fmt.Println("received invalid TCP Package ", err)
 				continue
 			}
 
-			data := reflect.New(tcpPack.Datatype).Interface()
-			err = json.Unmarshal(tcpPack.jsonBytes, &data)
-			if err != nil {
-				fmt.Println("payload (jsonBytes) of TCP Package is invalid", err)
+			var dataType reflect.Type
+
+			switch ttj.TypeId {
+			case "commontypes.ElevatorState":
+				dataType = reflect.TypeOf(commontypes.ElevatorState{})
+			case "commontypes.ButtonPressed":
+				dataType = reflect.TypeOf(commontypes.ButtonPressed{})
+			case "commontypes.OrderComplete":
+				dataType = reflect.TypeOf(commontypes.OrderComplete{})
+			case "commontypes.HallRequests":
+				dataType = reflect.TypeOf(commontypes.HallRequests{})
+			case "commontypes.SyncOK":
+				dataType = reflect.TypeOf(commontypes.SyncOK{})
+			default:
+				fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
 				continue
 			}
 
-			if data != nil {
-				fromSlaveCh <- SlaveMessage{
-					Addr:    slaveAddr,
-					Payload: data,
-				}
+			dataValue := reflect.New(dataType)
+			err = json.Unmarshal(ttj.JSON, dataValue.Interface())
+			if err != nil {
+				fmt.Println("payload (JSON) of TCP Package is invalid", err)
+				continue
 			}
+
+			fromSlaveCh <- SlaveMessage{
+				Addr:    slaveAddr,
+				Payload: reflect.Indirect(dataValue).Interface(),
+			}
+
 		}
 	}
 }
@@ -219,11 +237,4 @@ func tcpReader(slaveConn *net.TCPConn, ch chan<- []byte, quitCh chan<- struct{})
 		ch <- buffer[:n]
 	}
 
-}
-
-func stringToType(s string) reflect.Type {
-	switch s {
-	case "ElevatorState":
-		return reflect.TypeOf(ElevatorState{})
-	}
 }
