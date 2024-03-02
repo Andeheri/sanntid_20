@@ -19,18 +19,32 @@ type Master_channels struct {
 
 	Log chan bool
 
-	Sender chan json.Marshaler
+	Sender chan interface{}
 }
 
-func Master_communication(chans *Master_channels) {
+// var allStates map[string]community.ElevatorState
+
+func Master_communication(masterAddress *net.TCPAddr, chans *Master_channels) {
+
+	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
+	if err != nil {
+		fmt.Println("Error connecting to master:", err)
+		return
+	}
+	
+	go Receiver(masterConn, chans)
+	go Sender(masterConn, chans.Sender)
+
 	for {
 		select {
 		case a := <-chans.ButtonPress:
 			fmt.Println(a, "sender button press melding")
-			//send message over TCP
+			pressed := community.ButtonEvent{Floor:a.Floor, Button:int(a.Button)}
+			chans.Sender <- pressed
 		case a := <-chans.ClearRequest:
 			fmt.Println(a, "sender clear request melding")
-			//send message over TCP
+			completed := community.OrderComplete{Floor: a.Floor, Button:int(a.Button)}
+			chans.Sender <- completed
 		case a := <-chans.Log:
 			fmt.Println(a, "lagrer data fra master")
 		}
@@ -48,7 +62,6 @@ func SendState(sender chan<- interface{}) {
 	fmt.Println("Sender state", state)
 
 	sender <- state
-
 }
 
 func Receiver(masterConn *net.TCPConn, chans *Master_channels) {
@@ -63,22 +76,26 @@ func Receiver(masterConn *net.TCPConn, chans *Master_channels) {
 			return
 		}
 
+		//should be community types?
 		var requests [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
 		var requestedState bool
+		var log bool //community log type
+
 
 		if err = json.Unmarshal(buffer[:n], &requests); err == nil {
 			chans.MasterRequests <- requests
 		} else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
 			chans.RequestedState <- requestedState
+		} else if err = json.Unmarshal(buffer[:n], &log); err == nil {
+			chans.Log <- log
 		} else {
 			fmt.Println("json.Unmarshal error (no matching data types) : ", err)
 			return
 		}
 	}
-
 }
 
-func Sender(masterConn *net.TCPConn, ch <-chan json.Marshaler) {
+func Sender(masterConn *net.TCPConn, ch <-chan interface{}) {
 	for {
 		data := <-ch
 		jsonBytes, err := json.Marshal(data)

@@ -40,9 +40,11 @@ func main() {
 		MasterRequests: master_requests,
 		RequestedState: requestedState,
 		Log: log,
+		Sender: sender,
 	}
 
-	go mastercom.Master_communication(&masterChans)
+	// need tcp connection to master
+	// go mastercom.Master_communication(&masterChans)
 
 	fsm.Init()
 
