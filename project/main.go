@@ -1,8 +1,8 @@
 package main
 
 import (
-	"elevator/scout"
-	. "fmt"
+	"fmt"
+	"project/scout"
 )
 
 type role string
@@ -14,7 +14,7 @@ const (
 	unknown role = "unknown"
 )
 
-func setElevatorRole(elevator_role *role){
+func setElevatorRole(elevator_role *role) {
 	*elevator_role = slave
 }
 
@@ -24,9 +24,8 @@ func main() {
 
 	setElevatorRole(&elevator_role)
 
-	Printf("Elevator role: %s\n", elevator_role)
+	fmt.Printf("Elevator role: %s\n", elevator_role)
 
-	
 	go scout.BroadcastInfo()
 	go scout.ListenForInfo()
 
