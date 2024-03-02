@@ -13,16 +13,13 @@ import (
 type Master_channels struct {
 	ButtonPress  chan elevio.ButtonEvent
 	ClearRequest chan elevio.ButtonEvent
-
 	MasterRequests chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
+	AllLights chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
 	RequestedState chan bool
-
-	Log chan bool
-
 	Sender chan interface{}
 }
 
-// var allStates map[string]community.ElevatorState
+var communityState community.CommunityState
 
 func Master_communication(masterAddress *net.TCPAddr, chans *Master_channels, stopch <-chan bool) {
 
@@ -39,14 +36,13 @@ func Master_communication(masterAddress *net.TCPAddr, chans *Master_channels, st
 		select {
 		case a := <-chans.ButtonPress:
 			fmt.Println(a, "sender button press melding")
+			//cab requests
 			pressed := community.ButtonEvent{Floor: a.Floor, Button: int(a.Button)}
 			chans.Sender <- pressed
 		case a := <-chans.ClearRequest:
 			fmt.Println(a, "sender clear request melding")
-			completed := community.OrderComplete{Floor: a.Floor, Button: int(a.Button)}
-			chans.Sender <- completed
-		case a := <-chans.Log:
-			fmt.Println(a, "lagrer data fra master")
+			completedOrder := community.OrderComplete{Floor: a.Floor, Button: int(a.Button)}
+			chans.Sender <- completedOrder
 		case <-stopch:
 			return
 		}
@@ -86,14 +82,21 @@ func Receiver(masterConn *net.TCPConn, chans *Master_channels, stopch <-chan boo
 
 		var requests [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
 		var requestedState bool
-		var log bool //community log type
+		var requestedCommunityState bool
+		var potentialCommunityState community.CommunityState
+		var allLights [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
+		
 
 		if err = json.Unmarshal(buffer[:n], &requests); err == nil {
 			chans.MasterRequests <- requests
 		} else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
 			chans.RequestedState <- requestedState
-		} else if err = json.Unmarshal(buffer[:n], &log); err == nil {
-			chans.Log <- log
+		} else if err = json.Unmarshal(buffer[:n], &potentialCommunityState); err == nil {
+			communityState = potentialCommunityState
+		} else if err = json.Unmarshal(buffer[:n], &requestedCommunityState); err == nil {
+			chans.Sender <- communityState
+		} else if err = json.Unmarshal(buffer[:n], &allLights); err == nil {
+			chans.AllLights <- allLights
 		} else {
 			fmt.Println("json.Unmarshal error (no matching data types) : ", err)
 			return

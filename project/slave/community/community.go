@@ -6,6 +6,7 @@ type ElevatorState struct {
 	Direction   string `json:"direction"`
 	CabRequests []bool `json:"cabRequests"`
 }
+
 type CommunityState struct {
 	HallRequests [][2]bool                `json:"hallRequests"`
 	States       map[string]ElevatorState `json:"states"`

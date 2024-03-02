@@ -29,16 +29,16 @@ func start(initalMasterAddress string, masterAddress <-chan string) {
 	clear_request := make(chan elevio.ButtonEvent)
 	master_requests := make(chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int)
 	requestedState := make(chan bool)
-	log := make(chan bool)
 	sender := make(chan interface{})
+	allLights := make(chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int)
 
 	masterChans := mastercom.Master_channels{
 		ButtonPress:    button_press,
 		ClearRequest:   clear_request,
 		MasterRequests: master_requests,
 		RequestedState: requestedState,
-		Log:            log,
 		Sender:         sender,
+		AllLights:   allLights,
 	}
 
 	fsm.Init()
@@ -87,6 +87,11 @@ func start(initalMasterAddress string, masterAddress <-chan string) {
 		case a := <-masterChans.RequestedState:
 			fmt.Println(a, "sender state til master")
 			mastercom.SendState(sender)
+
+		case a := <-masterChans.AllLights:
+			fmt.Println(a, "mottat all lights melding")
+			fsm.Elev.AllLights = a
+			fsm.SetAllLights(fsm.Elev)
 		}
 	}
 }

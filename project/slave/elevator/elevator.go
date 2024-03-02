@@ -29,9 +29,9 @@ type Elevator struct {
     Floor int
     Dirn elevio.MotorDirection
 	Obstructed bool
-	Door_timer time.Timer
+	DoorTimer time.Timer
     Requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
-	All_lights[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
+	AllLights[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
     Behaviour ElevatorBehaviour
 	Config Config 
 }
@@ -78,7 +78,7 @@ func Initialize() Elevator{
         Floor: -1,
         Dirn: elevio.MD_Stop,
 		Obstructed: false,
-		Door_timer: *time.NewTimer(-1),
+		DoorTimer: *time.NewTimer(-1),
         Behaviour: EB_Idle,
         Config: Config {
             ClearRequestVariant: CV_InDirn,
