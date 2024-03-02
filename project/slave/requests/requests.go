@@ -1,6 +1,7 @@
 package requests
 
 import (
+	"project/slave/cabfile"
 	"project/slave/elevator"
 	"project/slave/elevio"
 	"project/slave/iodevice"
@@ -121,7 +122,7 @@ func ClearAtCurrentFloor(e elevator.Elevator, clear_request chan<- elevio.Button
         
     case elevator.CV_InDirn:
         e.Requests[e.Floor][elevio.BT_Cab] = 0;
-        //write to file here!
+        cabfile.Clear(e.Floor)
 
         switch(e.Dirn){
         case elevio.MD_Up:

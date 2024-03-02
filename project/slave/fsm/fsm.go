@@ -7,6 +7,7 @@ import (
 	"project/slave/elevio"
 	"project/slave/iodevice"
 	"project/slave/requests"
+    "project/slave/cabfile"
 	"time"
 )
 
@@ -21,6 +22,13 @@ func Init(){
     outputDevice.MotorDirection(elevio.MD_Down);
     Elev.Dirn = elevio.MD_Down;
     Elev.Behaviour = elevator.EB_Moving;
+
+    cabRequests := cabfile.Read()
+    for floor := 0; floor < iodevice.N_FLOORS; floor++{
+        if cabRequests[floor] != 0{
+            Elev.Requests[floor][elevio.BT_Cab] = 1
+        }
+    }
 }
 
 func SetAllLights(es elevator.Elevator){
@@ -44,15 +52,24 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer 
         if requests.ShouldClearImmediately(Elev, btn_floor, btn_type){
             door_timer.Reset(Elev.Config.DoorOpenDuration_s)
         } else {
+            if btn_type == elevio.BT_Cab{
+                cabfile.Set(btn_floor)
+            }
             Elev.Requests[btn_floor][btn_type] = 1
         }
 
 
     case elevator.EB_Moving:
+        if btn_type == elevio.BT_Cab{
+            cabfile.Set(btn_floor)
+        }
         Elev.Requests[btn_floor][btn_type] = 1
 
         
     case elevator.EB_Idle:    
+        if btn_type == elevio.BT_Cab{
+            cabfile.Set(btn_floor)
+        }
         Elev.Requests[btn_floor][btn_type] = 1
         pair := requests.ChooseDirection(Elev)
         Elev.Dirn = pair.Dirn;
