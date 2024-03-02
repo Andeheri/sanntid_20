@@ -3,17 +3,23 @@ package assigner
 import (
 	"encoding/json"
 	"fmt"
-	"project/master/community"
 	"os/exec"
 	"path/filepath"
+	"project/commontypes"
+	"project/master/slavecomm"
 	"runtime"
 )
+
+type CommunityState struct {
+	HallRequests commontypes.HallRequests             `json:"hallRequests"`
+	States       map[string]commontypes.ElevatorState `json:"states"`
+}
 
 var assignerExecutable string = ""
 
 // Based on https://github.com/TTK4145/Project-resources/blob/master/cost_fns/usage_examples/example.go
 // hall_request_assigner from https://github.com/TTK4145/Project-resources/releases/tag/v1.1.1
-func Assign(state *community.CommunityState) *map[string][][2]bool {
+func Assign(state *CommunityState) *map[string]commontypes.AssignedRequests {
 
 	if assignerExecutable == "" {
 		_, filename, _, ok := runtime.Caller(0)
@@ -62,10 +68,10 @@ var syncState struct {
 	pending map[string]struct{} //Only using the keys. values are empty
 }
 
-var communityState community.CommunityState
+var communityState CommunityState
 var ipToSendCh map[string]chan interface{}
 
-func Start(newSlaveCh chan string, readSlaveCh chan community.SlaveMessage) {
+func Start(newSlaveCh chan string, readSlaveCh chan slavecomm.SlaveMessage) {
 	ipToSendCh = make(map[string]chan interface{})
 	syncState.pending = make(map[string]struct{})
 
@@ -75,15 +81,15 @@ func Start(newSlaveCh chan string, readSlaveCh chan community.SlaveMessage) {
 		message := <-readSlaveCh
 
 		switch message.Payload.(type) {
-		case community.ElevatorState:
-			_, sendChExists := ipToSendCh[message.SenderIP]
+		case commontypes.ElevatorState:
+			_, sendChExists := ipToSendCh[message.Addr]
 			if !sendChExists {
-				ipToSendCh[message.SenderIP] = make(chan interface{})
+				ipToSendCh[message.Addr] = make(chan interface{})
 			}
 
-			communityState.States[message.SenderIP] = message.Payload.(community.ElevatorState)
+			communityState.States[message.Addr] = message.Payload.(community.ElevatorState)
 
-			delete(syncState.pending, message.SenderIP)
+			delete(syncState.pending, message.Addr)
 
 		case community.ButtonEvent:
 			//if hall button:

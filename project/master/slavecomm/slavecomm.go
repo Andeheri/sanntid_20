@@ -2,12 +2,108 @@ package slavecomm
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
-	"project/master/community"
+	"reflect"
+	"time"
 )
 
-func Listener(port int) {
+type SlaveMessage struct {
+	Addr    string
+	Payload interface{}
+}
+
+type sendRequest struct {
+	msg     SlaveMessage
+	errorCh chan error
+}
+
+type getSlavesRequest struct {
+	returnCh chan []string
+}
+
+type addSlaveRequest struct {
+	addr string
+	ch   chan interface{}
+}
+type removeSlaveRequest struct {
+	addr string
+}
+
+type tcpPackage struct {
+	Datatype  reflect.Type
+	jsonBytes []byte
+}
+
+var managerCh chan interface{}
+
+func Send(addr string, data interface{}, timeoutms int) error {
+
+	request := sendRequest{
+		msg: SlaveMessage{
+			Addr:    addr,
+			Payload: data,
+		},
+		errorCh: make(chan error),
+	}
+
+	managerCh <- request
+	select {
+	case err := <-request.errorCh:
+		if err != nil {
+			return err
+		}
+		return nil
+
+	case <-time.After(time.Duration(timeoutms) * time.Millisecond):
+		return errors.New("slavecomm.Send() Timeout")
+	}
+
+}
+
+func Slaves(timeoutms int) ([]string, error) {
+
+	request := getSlavesRequest{
+		returnCh: make(chan []string),
+	}
+
+	managerCh <- request
+
+	select {
+	case slaves := <-request.returnCh:
+		return slaves, nil
+	case <-time.After(time.Duration(timeoutms) * time.Millisecond):
+		return nil, errors.New("slavecomm.Slaves() Timeout")
+	}
+}
+
+func Manager() {
+	addrToCh := make(map[string]chan interface{})
+	managerCh = make(chan interface{})
+
+	for request := range managerCh {
+		switch req := request.(type) {
+		case sendRequest:
+			addrToCh[req.msg.Addr] <- req.msg.Payload
+			req.errorCh <- nil
+		case getSlavesRequest:
+			slaves := make([]string, 0, len(addrToCh))
+			for addr := range addrToCh {
+				slaves = append(slaves, addr)
+			}
+			req.returnCh <- slaves
+		case removeSlaveRequest:
+			delete(addrToCh, req.addr)
+		case addSlaveRequest:
+			addrToCh[req.addr] = req.ch
+		default:
+			fmt.Println("ERROR: Unknown manager request")
+		}
+	}
+}
+
+func Listener(port int, fromSlaveCh chan<- interface{}) {
 
 	localAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -30,64 +126,79 @@ func Listener(port int) {
 			continue
 		}
 
-		handleSlave(slaveConn, nil, nil)
+		go handleSlave(slaveConn, fromSlaveCh)
 	}
 
 }
 
-func handleSlave(slaveConn *net.TCPConn, toSlaveCh <-chan json.Marshaler, toMasterCh chan<- interface{}) {
-	defer slaveConn.Close()
+func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- interface{}) {
 
-	remoteIP := slaveConn.RemoteAddr().String()
+	fmt.Println("Connected to", slaveConn.RemoteAddr().String())
+
+	slaveAddr := slaveConn.RemoteAddr().String()
 
 	tcpReadCh := make(chan []byte)
 	quitCh := make(chan struct{})
+	toSlaveCh := make(chan interface{})
+
+	managerCh <- addSlaveRequest{addr: slaveAddr, ch: toSlaveCh}
+
+	defer func() {
+		slaveConn.Close()
+		managerCh <- removeSlaveRequest{addr: slaveAddr}
+	}()
 
 	go tcpReader(slaveConn, tcpReadCh, quitCh)
 
 	for {
 		select {
 		case <-quitCh:
-			toMasterCh <- community.SlaveMessage{
-				SenderIP: remoteIP,
-				Payload:  "disconnected",
-			}
+			fmt.Println("Closing connection to", slaveConn.RemoteAddr().String())
 			return
 		case data := <-toSlaveCh:
-			jsonBytes, err := json.Marshal(data)
+			jsonBytesPayload, err := json.Marshal(data)
+			if err != nil {
+				fmt.Println("json.Marshal error: ", err)
+				continue
+			}
+			tcpPackage := tcpPackage{
+				Datatype:  reflect.TypeOf(data),
+				jsonBytes: jsonBytesPayload,
+			}
+
+			jsonBytesPackage, err := json.Marshal(tcpPackage)
 			if err != nil {
 				fmt.Println("json.Marshal error: ", err)
 				continue
 			}
 
-			_, err = slaveConn.Write(jsonBytes)
+			_, err = slaveConn.Write(jsonBytesPackage)
 			if err != nil {
-				fmt.Println("Error:", err)
-				fmt.Println("Closing connection to", slaveConn.RemoteAddr().String())
+				fmt.Println("net.Write Error:", err)
 				quitCh <- struct{}{}
 				return
 			}
 		case msg := <-tcpReadCh:
-			var data interface{}
-			var elevatorState community.ElevatorState
-			var buttonEvent community.ButtonEvent
-			var orderComplete community.OrderComplete
+			var tcpPack tcpPackage
 
-			if err := json.Unmarshal(msg, &elevatorState); err == nil {
-				data = elevatorState
-			} else if err = json.Unmarshal(msg, &buttonEvent); err == nil {
-				data = buttonEvent
-			} else if err = json.Unmarshal(msg, &orderComplete); err == nil {
-				data = orderComplete
-			} else {
-				fmt.Println("json.Unmarshal error (no matching data types) : ", err)
+			//this unmarshaling no work :(
+			err := json.Unmarshal(msg, &tcpPack)
+			if err != nil || tcpPack.Datatype == nil {
+				fmt.Println("received invalid TCP Package ", err)
+				continue
+			}
+
+			data := reflect.New(tcpPack.Datatype).Interface()
+			err = json.Unmarshal(tcpPack.jsonBytes, &data)
+			if err != nil {
+				fmt.Println("payload (jsonBytes) of TCP Package is invalid", err)
 				continue
 			}
 
 			if data != nil {
-				toMasterCh <- community.SlaveMessage{
-					SenderIP: remoteIP,
-					Payload:  data,
+				fromSlaveCh <- SlaveMessage{
+					Addr:    slaveAddr,
+					Payload: data,
 				}
 			}
 		}
@@ -101,8 +212,7 @@ func tcpReader(slaveConn *net.TCPConn, ch chan<- []byte, quitCh chan<- struct{})
 		// Read data from the client
 		n, err := slaveConn.Read(buffer)
 		if err != nil {
-			fmt.Println("Error:", err)
-			fmt.Println("Closing connection to", slaveConn.RemoteAddr().String())
+			fmt.Println("net.Read Error:", err)
 			quitCh <- struct{}{}
 			return
 		}
@@ -111,4 +221,9 @@ func tcpReader(slaveConn *net.TCPConn, ch chan<- []byte, quitCh chan<- struct{})
 
 }
 
-
+func stringToType(s string) reflect.Type {
+	switch s {
+	case "ElevatorState":
+		return reflect.TypeOf(ElevatorState{})
+	}
+}
