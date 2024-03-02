@@ -2,8 +2,8 @@ package elevator
 
 import (
 	"fmt"
-	"slave/elevio"
-	"slave/iodevice"
+	"project/slave/elevio"
+	"project/slave/iodevice"
 	"time"
 )
 
@@ -31,7 +31,7 @@ type Elevator struct {
 	Obstructed bool
 	DoorTimer time.Timer
     Requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
-	AllLights[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
+	HallLights[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
     Behaviour ElevatorBehaviour
 	Config Config 
 }

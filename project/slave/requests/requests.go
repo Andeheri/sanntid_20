@@ -1,9 +1,9 @@
 package requests
 
 import (
-	"slave/elevator"
-	"slave/elevio"
-	"slave/iodevice"
+	"project/slave/elevator"
+	"project/slave/elevio"
+	"project/slave/iodevice"
 )
 
 type DirnBehaviourPair struct{
@@ -121,6 +121,8 @@ func ClearAtCurrentFloor(e elevator.Elevator, clear_request chan<- elevio.Button
         
     case elevator.CV_InDirn:
         e.Requests[e.Floor][elevio.BT_Cab] = 0;
+        //write to file here!
+
         switch(e.Dirn){
         case elevio.MD_Up:
             if(!above(e) && e.Requests[e.Floor][elevio.BT_HallUp] == 0){
@@ -163,7 +165,7 @@ func ClearAtCurrentFloor(e elevator.Elevator, clear_request chan<- elevio.Button
 
 func clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clear_request chan<- elevio.ButtonEvent) (elevator.Elevator){
     e.Requests[floor][btnType] = 0
-    e.AllLights[floor][btnType] = 0
+    e.HallLights[floor][btnType] = 0
     clear_request <- elevio.ButtonEvent{Floor: floor, Button: btnType}
     return e
 }

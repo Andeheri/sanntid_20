@@ -2,10 +2,11 @@ package fsm
 
 import (
 	"fmt"
-	"slave/elevator"
-	"slave/elevio"
-	"slave/iodevice"
-	"slave/requests"
+	"project/commontypes"
+	"project/slave/elevator"
+	"project/slave/elevio"
+	"project/slave/iodevice"
+	"project/slave/requests"
 	"time"
 )
 
@@ -25,8 +26,11 @@ func Init(){
 func SetAllLights(es elevator.Elevator){
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
         for btn := elevio.ButtonType(0); btn < iodevice.N_BUTTONS; btn++{
-            outputDevice.RequestButtonLight(btn, floor, es.AllLights[floor][btn]!=0);
+            outputDevice.RequestButtonLight(btn, floor, es.HallLights[floor][btn]!=0);
         }
+    }
+    for floor := 0; floor < iodevice.N_FLOORS; floor++{
+        outputDevice.RequestButtonLight(elevio.BT_Cab, floor, es.Requests[floor][elevio.BT_Cab]!=0);
     }
 }
 
@@ -40,12 +44,12 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer 
         if requests.ShouldClearImmediately(Elev, btn_floor, btn_type){
             door_timer.Reset(Elev.Config.DoorOpenDuration_s)
         } else {
-            Elev.Requests[btn_floor][btn_type] = 1;
+            Elev.Requests[btn_floor][btn_type] = 1
         }
 
 
     case elevator.EB_Moving:
-        Elev.Requests[btn_floor][btn_type] = 1;
+        Elev.Requests[btn_floor][btn_type] = 1
 
         
     case elevator.EB_Idle:    
@@ -57,9 +61,9 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer 
         case elevator.EB_DoorOpen:
             outputDevice.DoorLight(true);
             door_timer.Reset(Elev.Config.DoorOpenDuration_s)
-            Elev = requests.ClearAtCurrentFloor(Elev, clear_request);
+            Elev = requests.ClearAtCurrentFloor(Elev, clear_request)
         case elevator.EB_Moving:
-            outputDevice.MotorDirection(Elev.Dirn);
+            outputDevice.MotorDirection(Elev.Dirn)
         case elevator.EB_Idle:
 
         }
@@ -146,27 +150,25 @@ func OnObstruction(is_obstructed bool){
 
 
 // clear all requests when receiving restructured list of orders from master.?
-func Requests_clearAll(){
-    for btn := 0; btn < iodevice.N_BUTTONS; btn++{
+func RequestsClearAll(){
+    for btn := 0; btn < 2; btn++{
         for floor := 0; floor < iodevice.N_FLOORS; floor++{
             Elev.Requests[floor][btn] = 0
         }    
-    }  
-    //clear some timers?
+    }
 }
 
 // call fsm button press for the restructured list of orders from master.?
-func Requests_setAll(master_requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int, door_timer *time.Timer, clear_request chan elevio.ButtonEvent) {
+func RequestsSetAll(masterRequests commontypes.AssignedRequests, door_timer *time.Timer, clear_request chan elevio.ButtonEvent) {
     //fsm on butonpress for loop
-    for btn := 0; btn < iodevice.N_BUTTONS; btn++{
+    for btn := 0; btn < 2; btn++{
         for floor := 0; floor < iodevice.N_FLOORS; floor++{
-            if master_requests[floor][btn] == 1 {
+            if masterRequests[floor][btn] {
                 OnRequestButtonPress(floor, elevio.ButtonType(btn), door_timer, clear_request)
             }
         }    
     }  
 }
-
 
 func GetCabRequests()[]bool{
     cabRequests := make([]bool,iodevice.N_FLOORS)
