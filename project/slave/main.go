@@ -1,17 +1,16 @@
-package main
+package slave
 
 import (
 	"fmt"
+	"net"
 	"slave/elevio"
 	"slave/fsm"
-	"slave/mastercom"
-
-	// "slave/testclear"
 	"slave/iodevice"
+	"slave/mastercom"
 	"time"
 )
 
-func main() {
+func start(initalMasterAddress string, masterAddress <-chan string) {
 	numFloors := 4
 
 	elevio.Init("localhost:15657", numFloors)
@@ -42,10 +41,14 @@ func main() {
 		Sender:         sender,
 	}
 
-	// need tcp connection to master
-	// go mastercom.Master_communication(&masterChans)
-
 	fsm.Init()
+
+	stopMaster := make(chan bool)
+	TCPAddr, err := net.ResolveTCPAddr("tcp", initalMasterAddress)
+	if err != nil {
+		fmt.Println("Error resolving TCP address from master:", err)
+	}
+	go mastercom.Master_communication(TCPAddr, &masterChans, stopMaster)
 
 	for {
 		select {
@@ -65,6 +68,15 @@ func main() {
 		case a := <-doorTimer.C:
 			fmt.Printf("%+v\n", a)
 			fsm.OnDoorTimeout(doorTimer, masterChans.ClearRequest)
+
+		case a := <-masterAddress:
+			stopMaster <- true
+			fmt.Println("mottat master addresse:", a)
+			TCPAddr, err := net.ResolveTCPAddr("tcp", a)
+			if err != nil {
+				fmt.Println("Error resolving TCP address from master:", err)
+			}
+			go mastercom.Master_communication(TCPAddr, &masterChans, stopMaster)
 
 		//moved these from mastercom.go as they are involved with current state
 		case a := <-masterChans.MasterRequests:

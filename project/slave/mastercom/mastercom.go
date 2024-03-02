@@ -15,7 +15,7 @@ type Master_channels struct {
 	ClearRequest chan elevio.ButtonEvent
 
 	MasterRequests chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
-	RequestedState  chan bool
+	RequestedState chan bool
 
 	Log chan bool
 
@@ -24,29 +24,31 @@ type Master_channels struct {
 
 // var allStates map[string]community.ElevatorState
 
-func Master_communication(masterAddress *net.TCPAddr, chans *Master_channels) {
+func Master_communication(masterAddress *net.TCPAddr, chans *Master_channels, stopch <-chan bool) {
 
 	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
 	if err != nil {
 		fmt.Println("Error connecting to master:", err)
 		return
 	}
-	
-	go Receiver(masterConn, chans)
-	go Sender(masterConn, chans.Sender)
+
+	go Receiver(masterConn, chans, stopch)
+	go Sender(masterConn, chans.Sender, stopch)
 
 	for {
 		select {
 		case a := <-chans.ButtonPress:
 			fmt.Println(a, "sender button press melding")
-			pressed := community.ButtonEvent{Floor:a.Floor, Button:int(a.Button)}
+			pressed := community.ButtonEvent{Floor: a.Floor, Button: int(a.Button)}
 			chans.Sender <- pressed
 		case a := <-chans.ClearRequest:
 			fmt.Println(a, "sender clear request melding")
-			completed := community.OrderComplete{Floor: a.Floor, Button:int(a.Button)}
+			completed := community.OrderComplete{Floor: a.Floor, Button: int(a.Button)}
 			chans.Sender <- completed
 		case a := <-chans.Log:
 			fmt.Println(a, "lagrer data fra master")
+		case <-stopch:
+			return
 		}
 	}
 }
@@ -64,11 +66,17 @@ func SendState(sender chan<- interface{}) {
 	sender <- state
 }
 
-func Receiver(masterConn *net.TCPConn, chans *Master_channels) {
+func Receiver(masterConn *net.TCPConn, chans *Master_channels, stopch <-chan bool) {
 
 	buffer := make([]byte, 1024)
 
 	for {
+		select {
+		case <-stopch:
+			return
+		default:
+		}
+
 		// Read data from the master
 		n, err := masterConn.Read(buffer)
 		if err != nil {
@@ -76,11 +84,9 @@ func Receiver(masterConn *net.TCPConn, chans *Master_channels) {
 			return
 		}
 
-		//should be community types?
 		var requests [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
 		var requestedState bool
 		var log bool //community log type
-
 
 		if err = json.Unmarshal(buffer[:n], &requests); err == nil {
 			chans.MasterRequests <- requests
@@ -95,18 +101,23 @@ func Receiver(masterConn *net.TCPConn, chans *Master_channels) {
 	}
 }
 
-func Sender(masterConn *net.TCPConn, ch <-chan interface{}) {
+func Sender(masterConn *net.TCPConn, ch <-chan interface{}, stopch <-chan bool) {
 	for {
-		data := <-ch
-		jsonBytes, err := json.Marshal(data)
-		if err != nil {
-			fmt.Println("json.Marshal error: ", err)
-			return
-		}
+		select {
+		case data := <-ch:
+			jsonBytes, err := json.Marshal(data)
+			if err != nil {
+				fmt.Println("json.Marshal error: ", err)
+				return
+			}
 
-		_, err = masterConn.Write(jsonBytes)
-		if err != nil {
-			fmt.Println("Error:", err)
+			_, err = masterConn.Write(jsonBytes)
+			if err != nil {
+				fmt.Println("Error:", err)
+				return
+
+			}
+		case <-stopch:
 			return
 		}
 	}
