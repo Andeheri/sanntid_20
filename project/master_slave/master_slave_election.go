@@ -16,16 +16,14 @@ func IPToNum(ip_address string) int {
 	return ip_as_num
 }
 
-func Election(local_IP string, mse_channel chan<- MSE_type, filtered_udp_recieve_channel <-chan map[string]struct{}) {
-	var highest_ip_int int
-	var highest_ip_string string
+func Election(localIP string, mseCh chan<- MSE_type, updatedIPAddressCh <-chan map[string]struct{}) {
+	var highest_ip_int int = 0
+	var highest_ip_string string = "0.0.0.0"
 	last_highest_ip := ""
 	last_role := Unknown
 
-	for ip_address_map := range filtered_udp_recieve_channel {
+	for ip_address_map := range updatedIPAddressCh {
 		// Possibly need to update role or master to connect to
-		highest_ip_string = local_IP
-		highest_ip_int = IPToNum(local_IP)
 		for ip_address := range ip_address_map {
 			ip_address_int := IPToNum(ip_address)
 			if (ip_address_int > highest_ip_int){
@@ -33,17 +31,19 @@ func Election(local_IP string, mse_channel chan<- MSE_type, filtered_udp_recieve
 				highest_ip_int = ip_address_int
 			}
 		}
+
 		if (highest_ip_string != last_highest_ip){
 			role := Unknown
-			if (highest_ip_string == local_IP){
+			if (highest_ip_string == localIP){
 				role = Master
 			}else{
 				role = Slave
 			}
+			// Check if a change in roles needs to take place
 			if (last_role != role || last_highest_ip != highest_ip_string){
 				last_role = role
 				last_highest_ip = highest_ip_string
-				mse_channel <- MSE_type{Role: role, IP: highest_ip_string}
+				mseCh <- MSE_type{Role: role, IP: highest_ip_string}
 			}
 		}
 	}

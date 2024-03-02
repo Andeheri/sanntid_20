@@ -39,46 +39,42 @@ func main() {
 	}
 
 	// Channels
-	send_udp_channel               := make(chan string)
-	recieve_udp_channel            := make(chan string)
-	mse_filtered_udp_channel       := make(chan map[string]struct{})
-	mse_channel                    := make(chan MSE_type)
-	keep_alive_tracker_reciever    := make(chan string)
-	keep_alive_tracker_transmitter := make(chan string)
+	recieveUDPChannel            := make(chan string)
+	MSEUpdatedIPChannel       := make(chan map[string]struct{})
+	MSEChannel                    := make(chan MSE_type)
+	keepAliveTrackerRecieverChannel    := make(chan string)
+	keepAliveTrackerTransmitterChannel := make(chan string)
 
 	// UDP
-	go scout.ListenForInfo(recieve_udp_channel)
-	go scout.BroadcastInfo(local_IP, send_udp_channel)
+	go scout.ListenForInfo(recieveUDPChannel)
 	go scout.SendKeepAliveMessage(local_IP, delta_t_keep_alive)
-	go scout.TrackMissedKeepAliveMessages(delta_t_missed_keep_alive, num_keep_alive, keep_alive_tracker_reciever, keep_alive_tracker_transmitter)
+	go scout.TrackMissedKeepAliveMessages(delta_t_missed_keep_alive, num_keep_alive, keepAliveTrackerRecieverChannel, keepAliveTrackerTransmitterChannel)
 
 	// Master-slave election
-	go master_slave.Election(local_IP, mse_channel, mse_filtered_udp_channel)
+	go master_slave.Election(local_IP, MSEChannel, MSEUpdatedIPChannel)
 
 	Printf("Elevator role: %s\n\n", elevator_role)
 
 	for {
 		select {
-			case recieved_message := <- recieve_udp_channel:
+			case recieved_message := <- recieveUDPChannel:
 				splitted_string := strings.Split(recieved_message, ": ")
 				IP_Addr_sender := splitted_string[0]
 				message := splitted_string[1]
 				//Printf("%s: %s\n", IP_Addr_sender, message)
 				if message == Keep_alive {
 					// Update IP-address-list and see if new master should be elected
-					if (IP_Addr_sender != local_IP){  // if elevator is not itself
-						// Send IP-address to keep-alive-tracker
-						keep_alive_tracker_reciever <- IP_Addr_sender
+					// Send IP-address to keep-alive-tracker
+					keepAliveTrackerRecieverChannel <- IP_Addr_sender
 
-						_, exists := ip_address_map[IP_Addr_sender]
-						ip_address_map[IP_Addr_sender] = struct{}{}
-						if (!exists){  // If it is a new elevator
-							Println("Current IP-adress list:", ip_address_map)
-							master_slave.SendMapToChannel[string, struct{}](ip_address_map, mse_filtered_udp_channel)
-						}
+					_, exists := ip_address_map[IP_Addr_sender]
+					ip_address_map[IP_Addr_sender] = struct{}{}
+					if (!exists){  // If it is a new elevator
+						Println("Current IP-adress list:", ip_address_map)
+						master_slave.SendMapToChannel[string, struct{}](ip_address_map, MSEUpdatedIPChannel)
 					}
 				}
-			case mse_data := <- mse_channel:
+			case mse_data := <- MSEChannel:
 				// Data recieved from Master Slave Election
 				elevator_role = mse_data.Role
 				master_ip := mse_data.IP
@@ -91,10 +87,10 @@ func main() {
 					startSlave(master_port, master_ip)
 				}
 
-			case not_alive_ip_address := <- keep_alive_tracker_transmitter:
+			case not_alive_ip_address := <- keepAliveTrackerTransmitterChannel:
 				delete(ip_address_map, not_alive_ip_address)
 				Println("Current IP-adress list:", ip_address_map)
-				master_slave.SendMapToChannel[string, struct{}](ip_address_map, mse_filtered_udp_channel)
+				master_slave.SendMapToChannel[string, struct{}](ip_address_map, MSEUpdatedIPChannel)
 		}
 	}
 }
