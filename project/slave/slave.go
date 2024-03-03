@@ -57,8 +57,6 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 		return
 	}
 
-	mastercom.SendState(masterChans.Sender)
-
 	for {
 		select {
 		case a := <-drvButtons:
