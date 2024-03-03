@@ -22,3 +22,24 @@ type SyncOK struct{}
 
 type RequestState struct{}
 type RequestHallRequests struct{}
+
+type MISOChBundle struct {
+	HallRequests  chan HallRequests
+	ElevatorState chan ElevatorState
+	ButtonPressed chan ButtonPressed
+	OrderComplete chan OrderComplete
+	SyncOK        chan SyncOK
+}
+
+type MOSIChBundle struct {
+	RequestHallRequests chan RequestHallRequests
+	RequestState        chan RequestState
+	UpdateOrders        chan HallRequests
+	UpdateLights        chan Lights
+	AssignedRequests    chan AssignedRequests
+}
+
+type TypeTaggedJSON struct {
+	TypeId string
+	JSON   []byte
+}
