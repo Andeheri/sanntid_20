@@ -42,28 +42,15 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 	defer masterConn.Close()
 
 	// Set a deadline for the connection
-	deadline := time.Now().Add(10000 * time.Second) // Adjust timeout as needed
+	deadline := time.Now().Add(120 * time.Second)
 	err = masterConn.SetDeadline(deadline)
 	if err != nil {
 		fmt.Println("Error setting deadline:", err)
 		return
 	}
-	// Send data to the server
-	_, err = masterConn.Write([]byte("Hello, server!"))
-	if err != nil {
-		fmt.Println("Error sending data:", err)
-		return
-	}
 
 	go Receiver(masterConn, chans, stopch)
 	go Sender(masterConn, chans.Sender, stopch)
-
-	// remove
-	// chans.Sender <- commontypes.RequestState{}
-	// chans.Sender <- commontypes.RequestHallRequests{}
-	// chans.Sender <- commontypes.HallRequests{{false,false},{false,true},{true,false},{false,true}}
-	// chans.Sender <- commontypes.Lights{{false,false},{false,true},{true,false},{false,true}}
-	// chans.Sender <- commontypes.AssignedRequests{{false,false},{false,true},{true,false},{false,true}}
 
 	for {
 		select {
@@ -136,9 +123,9 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan stru
 				chans.RequestedState <- struct{}{}
 			case reflect.TypeOf(commontypes.RequestHallRequests{}):
 				chans.Sender <- hallRequests
-			case reflect.TypeOf(commontypes.HallRequests{}):
-				hallRequests = object.(commontypes.HallRequests)
-				chans.Sender <- commontypes.SyncOK{}
+			case reflect.TypeOf(commontypes.SyncRequests{}):
+				hallRequests = object.(commontypes.SyncRequests).Requests
+				chans.Sender <- commontypes.SyncOK{Id: object.(commontypes.SyncRequests).Id}
 			case reflect.TypeOf(commontypes.Lights{}):
 				chans.HallLights <- object.(commontypes.Lights)
 			case reflect.TypeOf(commontypes.AssignedRequests{}):
