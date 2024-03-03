@@ -163,7 +163,7 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 				continue
 			}
 			tcpPackage := commontypes.TypeTaggedJSON{
-				TypeId: reflect.TypeOf(data).String(),
+				TypeId: reflect.TypeOf(data).Name(),
 				JSON:   jsonBytesPayload,
 			}
 
@@ -182,41 +182,28 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 		case msg := <-tcpReadCh:
 			var ttj commontypes.TypeTaggedJSON
 
-			//this unmarshaling no work :(
 			err := json.Unmarshal(msg, &ttj)
 			if err != nil {
 				fmt.Println("received invalid TCP Package ", err)
 				continue
 			}
 
-			var dataType reflect.Type
+			objectPtr, err := ttj.ToObject(
+				reflect.TypeOf(commontypes.ElevatorState{}),
+				reflect.TypeOf(commontypes.ButtonPressed{}),
+				reflect.TypeOf(commontypes.OrderComplete{}),
+				reflect.TypeOf(commontypes.SyncOK{}),
+				reflect.TypeOf(commontypes.HallRequests{}),
+			)
 
-			switch ttj.TypeId {
-			case "commontypes.ElevatorState":
-				dataType = reflect.TypeOf(commontypes.ElevatorState{})
-			case "commontypes.ButtonPressed":
-				dataType = reflect.TypeOf(commontypes.ButtonPressed{})
-			case "commontypes.OrderComplete":
-				dataType = reflect.TypeOf(commontypes.OrderComplete{})
-			case "commontypes.HallRequests":
-				dataType = reflect.TypeOf(commontypes.HallRequests{})
-			case "commontypes.SyncOK":
-				dataType = reflect.TypeOf(commontypes.SyncOK{})
-			default:
-				fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
-				continue
-			}
-
-			dataValue := reflect.New(dataType)
-			err = json.Unmarshal(ttj.JSON, dataValue.Interface())
 			if err != nil {
-				fmt.Println("payload (JSON) of TCP Package is invalid", err)
+				fmt.Println("ttj.ToValuePtr error: ", err)
 				continue
 			}
 
 			fromSlaveCh <- SlaveMessage{
 				Addr:    slaveAddr,
-				Payload: reflect.Indirect(dataValue).Interface(),
+				Payload: objectPtr,
 			}
 
 		}
