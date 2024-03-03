@@ -15,7 +15,7 @@ var Elev elevator.Elevator = elevator.Initialize()
 var outputDevice iodevice.ElevOutputDevice
 
 
-func Init(){
+func Init(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
     outputDevice = iodevice.Elevio_getOutputDevice()
 
     // Code for fixing starting position between floors
@@ -26,7 +26,8 @@ func Init(){
     cabRequests := cabfile.Read()
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
         if cabRequests[floor] != 0{
-            Elev.Requests[floor][elevio.BT_Cab] = 1
+            // Elev.Requests[floor][elevio.BT_Cab] = 1
+            OnRequestButtonPress(floor, elevio.BT_Cab, doorTimer, clearRequest)
         }
     }
 }
@@ -43,7 +44,7 @@ func SetAllLights(es elevator.Elevator){
 }
 
 
-func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer *time.Timer, clear_request chan elevio.ButtonEvent){
+func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer *time.Timer, clear_request chan<- elevio.ButtonEvent){
     fmt.Printf("\n(%d, %s)\n", btn_floor, iodevice.Elevio_button_toString(btn_type))
     Elev.Print()
     

@@ -42,7 +42,7 @@ func start(initalMasterAddress string, masterAddress <-chan string) {
 		AllLights:   allLights,
 	}
 
-	fsm.Init()
+	fsm.Init(doorTimer, masterChans.ClearRequest)
 
 	stopMaster := make(chan bool)
 	TCPAddr, err := net.ResolveTCPAddr("tcp", initalMasterAddress)
