@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func Start(initialMasterAddress string, masterAddress <-chan string) {
+func Start(initialMasterAddress string, masterAddress <-chan string, quit chan bool) {
 	numFloors := 4
 
 	elevio.Init("localhost:15657", numFloors)
@@ -49,7 +49,14 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 	if err != nil {
 		fmt.Println("Error resolving TCP address from master:", err)
 	}
-	go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
+	quitSlave := make(chan bool)
+	go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster, quitSlave)
+	a := <- quitSlave
+	fmt.Println(a, "failed connection to master")
+	if a {
+		quit <- true
+		return
+	}
 
 	mastercom.SendState(masterChans.Sender)
 
@@ -82,7 +89,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 			if err != nil {
 				fmt.Println("Error resolving TCP address from master:", err)
 			}
-			go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
+			go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster, quitSlave)
 
 		//moved these from mastercom.go as they are involved with current state
 		case a := <-masterChans.MasterRequests:
@@ -98,6 +105,12 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 			fmt.Println(a, "mottat all lights melding")
 			fsm.Elev.HallLights = a
 			fsm.SetAllLights(fsm.Elev)
+			
+		case a := <-quitSlave:
+			fmt.Println(a, "quit slave melding")
+			quit <- true
+			return
 		}
+
 	}
 }

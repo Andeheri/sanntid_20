@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"time"
 	"project/commontypes"
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"project/slave/iodevice"
+	"time"
 )
 
 type MasterChannels struct {
@@ -16,7 +16,7 @@ type MasterChannels struct {
 	ClearRequest chan elevio.ButtonEvent
 
 	MasterRequests chan commontypes.AssignedRequests
-	AllLights chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
+	AllLights      chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
 	RequestedState chan bool
 
 	Sender chan interface{}
@@ -29,28 +29,32 @@ var hallRequests = commontypes.HallRequests{
 	{false, true},
 }
 
-func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan bool) {
+func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan bool, quitSlave chan<- bool) {
 
 	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
 	if err != nil {
 		fmt.Println("Error connecting to master:", err)
+		quitSlave <- true
+		fmt.Println("quitSlave melding sendt")
 		return
 	}
+	quitSlave <- false
+	
 	defer masterConn.Close()
 
-    // Set a deadline for the connection
-    deadline := time.Now().Add(10000 * time.Second) // Adjust timeout as needed
-    err = masterConn.SetDeadline(deadline)
-    if err != nil {
-        fmt.Println("Error setting deadline:", err)
-        return
-    }
-    // Send data to the server
-    _, err = masterConn.Write([]byte("Hello, server!"))
-    if err != nil {
-        fmt.Println("Error sending data:", err)
-        return
-    }
+	// Set a deadline for the connection
+	deadline := time.Now().Add(10000 * time.Second) // Adjust timeout as needed
+	err = masterConn.SetDeadline(deadline)
+	if err != nil {
+		fmt.Println("Error setting deadline:", err)
+		return
+	}
+	// Send data to the server
+	_, err = masterConn.Write([]byte("Hello, server!"))
+	if err != nil {
+		fmt.Println("Error sending data:", err)
+		return
+	}
 
 	go Receiver(masterConn, chans, stopch)
 	go Sender(masterConn, chans.Sender, stopch)
@@ -94,40 +98,51 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan bool
 		case <-stopch:
 			return
 		default:
-		
 
-		// Read data from the master
-		n, err := masterConn.Read(buffer)
-		if err != nil {
-			fmt.Println("Error:", err)
-			return
-		}
+			// Read data from the master
+			n, err := masterConn.Read(buffer)
+			if err != nil {
+				fmt.Println("Error:", err)
+				return
+			}
 
-		var requests commontypes.AssignedRequests
-		// var requestedState commontypes.RequestState
-		// var requestedHallRequests commontypes.RequestHallRequests
-		// var allLights commontypes.Lights
+			var test int
 
-		
+			if err = json.Unmarshal(buffer[:n], &test); err == nil {
+				switch test {
+				case 1:
+					chans.MasterRequests <- commontypes.AssignedRequests{{true, false}, {false, true}, {true, false}, {false, true}}
+					fmt.Println("MasterRequests melding mottatt")
+				case 2:
+					SendState(chans.Sender)
+				case 3:
+					chans.AllLights <- [iodevice.N_FLOORS][iodevice.N_BUTTONS]int{{1, 0}, {0, 1}, {1, 0}, {0, 1}}
+				}
 
-		if err = json.Unmarshal(buffer[:n], &requests); err == nil {
-			chans.MasterRequests <- requests
-			fmt.Println("MasterRequests melding mottatt")
-		} //else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
-		// 	chans.RequestedState <- requestedState
-		// } else if err = json.Unmarshal(buffer[:n], &requestedHallRequests); err == nil {
-		// 	chans.Sender <- requestedCommunityState
-		// } else if err = json.Unmarshal(buffer[:n], &allLights); err == nil {
-		// 	chans.AllLights <- allLights
-		// } else {
-		// 	fmt.Println("json.Unmarshal error (no matching data types) : ", err)
-		// 	return
-		// }
-		}
+				// var requests commontypes.AssignedRequests
+				// // var requestedState commontypes.RequestState
+				// // var requestedHallRequests commontypes.RequestHallRequests
+				// // var allLights commontypes.Lights
+
+				// if err = json.Unmarshal(buffer[:n], &requests); err == nil {
+				// 	chans.MasterRequests <- requests
+				// 	fmt.Println("MasterRequests melding mottatt")
+				// }
+
+				//else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
+				// 	chans.RequestedState <- requestedState
+				// } else if err = json.Unmarshal(buffer[:n], &requestedHallRequests); err == nil {
+				// 	chans.Sender <- requestedCommunityState
+				// } else if err = json.Unmarshal(buffer[:n], &allLights); err == nil {
+				// 	chans.AllLights <- allLights
+				// } else {
+				// 	fmt.Println("json.Unmarshal error (no matching data types) : ", err)
+				// 	return
+				// }
+			}
 		}
 	}
-
-
+}
 
 func Sender(masterConn *net.TCPConn, ch <-chan interface{}, stopch <-chan bool) {
 	for {
