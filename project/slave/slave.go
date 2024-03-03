@@ -26,17 +26,17 @@ func start(initalMasterAddress string, masterAddress <-chan string) {
 	go elevio.PollFloorSensor(drvFloors)
 	go elevio.PollObstructionSwitch(drvObstr)
 
-	button_press := make(chan elevio.ButtonEvent)
-	clear_request := make(chan elevio.ButtonEvent)
-	master_requests := make(chan commontypes.AssignedRequests)
+	buttonPress := make(chan elevio.ButtonEvent)
+	clearRequest := make(chan elevio.ButtonEvent)
+	masterRequests := make(chan commontypes.AssignedRequests)
 	requestedState := make(chan bool)
 	sender := make(chan interface{})
 	allLights := make(chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int)
 
-	masterChans := mastercom.Master_channels{
-		ButtonPress:    button_press,
-		ClearRequest:   clear_request,
-		MasterRequests: master_requests,
+	masterChans := mastercom.MasterChannels{
+		ButtonPress:    buttonPress,
+		ClearRequest:   clearRequest,
+		MasterRequests: masterRequests,
 		RequestedState: requestedState,
 		Sender:         sender,
 		AllLights:   allLights,
@@ -49,7 +49,7 @@ func start(initalMasterAddress string, masterAddress <-chan string) {
 	if err != nil {
 		fmt.Println("Error resolving TCP address from master:", err)
 	}
-	go mastercom.Master_communication(TCPAddr, &masterChans, stopMaster)
+	go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
 
 	for {
 		select {
@@ -80,7 +80,7 @@ func start(initalMasterAddress string, masterAddress <-chan string) {
 			if err != nil {
 				fmt.Println("Error resolving TCP address from master:", err)
 			}
-			go mastercom.Master_communication(TCPAddr, &masterChans, stopMaster)
+			go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
 
 		//moved these from mastercom.go as they are involved with current state
 		case a := <-masterChans.MasterRequests:

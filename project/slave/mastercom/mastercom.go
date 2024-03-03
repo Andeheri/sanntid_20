@@ -10,7 +10,7 @@ import (
 	"project/slave/iodevice"
 )
 
-type Master_channels struct {
+type MasterChannels struct {
 	ButtonPress  chan elevio.ButtonEvent
 	ClearRequest chan elevio.ButtonEvent
 
@@ -23,7 +23,7 @@ type Master_channels struct {
 
 var hallRequests commontypes.HallRequests
 
-func Master_communication(masterAddress *net.TCPAddr, chans *Master_channels, stopch <-chan bool) {
+func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan bool) {
 
 	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
 	if err != nil {
@@ -63,7 +63,7 @@ func SendState(sender chan<- interface{}) {
 	sender <- state
 }
 
-func Receiver(masterConn *net.TCPConn, chans *Master_channels, stopch <-chan bool) {
+func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan bool) {
 
 	// buffer := make([]byte, 1024)
 
@@ -72,7 +72,7 @@ func Receiver(masterConn *net.TCPConn, chans *Master_channels, stopch <-chan boo
 		case <-stopch:
 			return
 		default:
-		}
+		
 
 		// // Read data from the master
 		// n, err := masterConn.Read(buffer)
@@ -99,6 +99,7 @@ func Receiver(masterConn *net.TCPConn, chans *Master_channels, stopch <-chan boo
 		// 	fmt.Println("json.Unmarshal error (no matching data types) : ", err)
 		// 	return
 		// }
+		}
 	}
 }
 

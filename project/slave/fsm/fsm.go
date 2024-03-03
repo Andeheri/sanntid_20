@@ -44,14 +44,14 @@ func SetAllLights(es elevator.Elevator){
 }
 
 
-func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer *time.Timer, clear_request chan<- elevio.ButtonEvent){
+func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
     fmt.Printf("\n(%d, %s)\n", btn_floor, iodevice.Elevio_button_toString(btn_type))
     Elev.Print()
     
     switch(Elev.Behaviour){
     case elevator.EB_DoorOpen:
         if requests.ShouldClearImmediately(Elev, btn_floor, btn_type){
-            door_timer.Reset(Elev.Config.DoorOpenDuration_s)
+            doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
         } else {
             if btn_type == elevio.BT_Cab{
                 cabfile.Set(btn_floor)
@@ -78,8 +78,8 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer 
         switch(pair.Behaviour){
         case elevator.EB_DoorOpen:
             outputDevice.DoorLight(true);
-            door_timer.Reset(Elev.Config.DoorOpenDuration_s)
-            Elev = requests.ClearAtCurrentFloor(Elev, clear_request)
+            doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
+            Elev = requests.ClearAtCurrentFloor(Elev, clearRequest)
         case elevator.EB_Moving:
             outputDevice.MotorDirection(Elev.Dirn)
         case elevator.EB_Idle:
@@ -97,7 +97,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, door_timer 
 
 
 
-func OnFloorArrival(newFloor int, door_timer *time.Timer, clear_request chan elevio.ButtonEvent){
+func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan elevio.ButtonEvent){
     fmt.Printf("\n(newfloor: %d)\n",newFloor)
     Elev.Print();
 
@@ -111,8 +111,8 @@ func OnFloorArrival(newFloor int, door_timer *time.Timer, clear_request chan ele
             fmt.Println("Opening door")
             outputDevice.MotorDirection(elevio.MD_Stop);
             outputDevice.DoorLight(true);
-            Elev = requests.ClearAtCurrentFloor(Elev, clear_request);
-            door_timer.Reset(Elev.Config.DoorOpenDuration_s)
+            Elev = requests.ClearAtCurrentFloor(Elev, clearRequest);
+            doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
             fmt.Println(Elev.Config.DoorOpenDuration_s)
             SetAllLights(Elev);
             Elev.Behaviour = elevator.EB_DoorOpen;
@@ -127,7 +127,7 @@ func OnFloorArrival(newFloor int, door_timer *time.Timer, clear_request chan ele
 
 
 
-func OnDoorTimeout(door_timer *time.Timer, clear_request chan elevio.ButtonEvent){
+func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan elevio.ButtonEvent){
     fmt.Println("\n(doorTimeout)")
     
     Elev.Print();
@@ -135,7 +135,7 @@ func OnDoorTimeout(door_timer *time.Timer, clear_request chan elevio.ButtonEvent
     if (Elev.Behaviour == elevator.EB_DoorOpen){
 
         if (Elev.Obstructed){
-            door_timer.Reset(Elev.Config.DoorOpenDuration_s)
+            doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
             return
         }
         pair := requests.ChooseDirection(Elev);
@@ -144,8 +144,8 @@ func OnDoorTimeout(door_timer *time.Timer, clear_request chan elevio.ButtonEvent
         
         switch(Elev.Behaviour){
         case elevator.EB_DoorOpen:
-            door_timer.Reset(Elev.Config.DoorOpenDuration_s)
-            Elev = requests.ClearAtCurrentFloor(Elev, clear_request);
+            doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
+            Elev = requests.ClearAtCurrentFloor(Elev, clearRequest);
             SetAllLights(Elev);
 
         case elevator.EB_Moving:
@@ -177,12 +177,12 @@ func RequestsClearAll(){
 }
 
 // call fsm button press for the restructured list of orders from master.?
-func RequestsSetAll(masterRequests commontypes.AssignedRequests, door_timer *time.Timer, clear_request chan elevio.ButtonEvent) {
+func RequestsSetAll(masterRequests commontypes.AssignedRequests, doorTimer *time.Timer, clearRequest chan elevio.ButtonEvent) {
     //fsm on butonpress for loop
     for btn := 0; btn < 2; btn++{
         for floor := 0; floor < iodevice.N_FLOORS; floor++{
             if masterRequests[floor][btn] {
-                OnRequestButtonPress(floor, elevio.ButtonType(btn), door_timer, clear_request)
+                OnRequestButtonPress(floor, elevio.ButtonType(btn), doorTimer, clearRequest)
             }
         }    
     }  
