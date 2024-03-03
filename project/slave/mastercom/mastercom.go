@@ -7,7 +7,6 @@ import (
 	"project/commontypes"
 	"project/slave/elevio"
 	"project/slave/fsm"
-	"project/slave/iodevice"
 	"time"
 	"reflect"
 )
@@ -17,18 +16,13 @@ type MasterChannels struct {
 	ClearRequest chan elevio.ButtonEvent
 
 	MasterRequests chan commontypes.AssignedRequests
-	AllLights      chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
+	HallLights      chan commontypes.Lights
 	RequestedState chan struct{}
 
 	Sender chan interface{}
 }
 
-var hallRequests = commontypes.HallRequests{
-	{true, false},
-	{false, true},
-	{true, false},
-	{false, true},
-}
+var hallRequests commontypes.HallRequests
 
 func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan struct{}, quitSlave chan<- bool) {
 
@@ -106,64 +100,92 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan stru
 				fmt.Println("Error:", err)
 				return
 			}
-
-			// var ttj commontypes.TypeTaggedJSON
-
-			// var dataType reflect.Type
-
-			// switch ttj.TypeId {
-			// case "commontypes.RequestState":
-			// 	SendState(chans.Sender)
-			// case "commontypes.RequestHallRequests":
-			// 	dataType = reflect.TypeOf(commontypes.ButtonPressed{})
-			// case "commontypes.HallRequests":
-			// 	dataType = reflect.TypeOf(commontypes.HallRequests{})
-			// case "commontypes.SyncOK":
-			// 	dataType = reflect.TypeOf(commontypes.SyncOK{})
-			// default:
-			// 	fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
-			// 	continue
-			// }
-
-			// dataValue := reflect.New(dataType)
-			// err = json.Unmarshal(ttj.JSON, dataValue.Interface())
-			// if err != nil {
-			// 	fmt.Println("payload (JSON) of TCP Package is invalid", err)
-			// 	continue
-			// }
-			var test int
-			if err = json.Unmarshal(buffer[:n], &test); err == nil {
-				switch test {
-				case 1:
-					chans.MasterRequests <- commontypes.AssignedRequests{{true, false}, {false, true}, {true, false}, {false, true}}
-					fmt.Println("MasterRequests melding mottatt")
-				case 2:
-					SendState(chans.Sender)
-				case 3:
-					chans.AllLights <- [iodevice.N_FLOORS][iodevice.N_BUTTONS]int{{1, 0}, {0, 1}, {1, 0}, {0, 1}}
-				}
-
-				// var requests commontypes.AssignedRequests
-				// // var requestedState commontypes.RequestState
-				// // var requestedHallRequests commontypes.RequestHallRequests
-				// // var allLights commontypes.Lights
-
-				// if err = json.Unmarshal(buffer[:n], &requests); err == nil {
-				// 	chans.MasterRequests <- requests
-				// 	fmt.Println("MasterRequests melding mottatt")
-				// }
-
-				//else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
-				// 	chans.RequestedState <- requestedState
-				// } else if err = json.Unmarshal(buffer[:n], &requestedHallRequests); err == nil {
-				// 	chans.Sender <- requestedCommunityState
-				// } else if err = json.Unmarshal(buffer[:n], &allLights); err == nil {
-				// 	chans.AllLights <- allLights
-				// } else {
-				// 	fmt.Println("json.Unmarshal error (no matching data types) : ", err)
-				// 	return
-				// }
+			var ttj commontypes.TypeTaggedJSON
+			err = json.Unmarshal(buffer[:n], &ttj)
+			if err != nil {
+				fmt.Println("received invalid TCP Package ", err)
+				continue
 			}
+
+			var dataType reflect.Type
+
+			switch ttj.TypeId {
+			case "commontypes.RequestState":
+				dataType = reflect.TypeOf(commontypes.RequestState{})
+			case "commontypes.RequestHallRequests":
+				dataType = reflect.TypeOf(commontypes.RequestHallRequests{})
+			case "commontypes.HallRequests":
+				dataType = reflect.TypeOf(commontypes.HallRequests{})
+			case "commontypes.Lights":
+				dataType = reflect.TypeOf(commontypes.Lights{})
+			case "commontypes.AssignedRequests":
+				dataType = reflect.TypeOf(commontypes.AssignedRequests{})
+			default:
+				fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
+				continue
+			}
+
+			dataValue := reflect.New(dataType)
+			err = json.Unmarshal(ttj.JSON, dataValue.Interface())
+			if err != nil {
+				fmt.Println("payload (JSON) of TCP Package is invalid", err)
+				continue
+			}
+
+			switch ttj.TypeId {
+			case "commontypes.RequestState":
+				chans.RequestedState <- struct{}{}
+			case "commontypes.RequestHallRequests":
+				chans.Sender <- hallRequests
+			case "commontypes.HallRequests":
+				hallRequests = dataValue.Interface().(commontypes.HallRequests)
+				chans.Sender <- commontypes.SyncOK{}
+			case "commontypes.Lights":
+				chans.HallLights <- dataValue.Interface().(commontypes.Lights)
+			case "commontypes.AssignedRequests":
+				chans.MasterRequests <- dataValue.Interface().(commontypes.AssignedRequests)
+			default:
+				fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
+				chans.Sender <- commontypes.RequestState{}
+				chans.Sender <- commontypes.RequestHallRequests{}
+				
+				continue
+			}
+			
+
+			// var test int
+			// if err = json.Unmarshal(buffer[:n], &test); err == nil {
+			// 	switch test {
+			// 	case 1:
+			// 		chans.MasterRequests <- commontypes.AssignedRequests{{true, false}, {false, true}, {true, false}, {false, true}}
+			// 		fmt.Println("MasterRequests melding mottatt")
+			// 	case 2:
+			// 		SendState(chans.Sender)
+			// 	case 3:
+			// 		chans.AllLights <- [iodevice.N_FLOORS][iodevice.N_BUTTONS]int{{1, 0}, {0, 1}, {1, 0}, {0, 1}}
+			// 	}
+
+			// 	// var requests commontypes.AssignedRequests
+			// 	// // var requestedState commontypes.RequestState
+			// 	// // var requestedHallRequests commontypes.RequestHallRequests
+			// 	// // var allLights commontypes.Lights
+
+			// 	// if err = json.Unmarshal(buffer[:n], &requests); err == nil {
+			// 	// 	chans.MasterRequests <- requests
+			// 	// 	fmt.Println("MasterRequests melding mottatt")
+			// 	// }
+
+			// 	//else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
+			// 	// 	chans.RequestedState <- requestedState
+			// 	// } else if err = json.Unmarshal(buffer[:n], &requestedHallRequests); err == nil {
+			// 	// 	chans.Sender <- requestedCommunityState
+			// 	// } else if err = json.Unmarshal(buffer[:n], &allLights); err == nil {
+			// 	// 	chans.AllLights <- allLights
+			// 	// } else {
+			// 	// 	fmt.Println("json.Unmarshal error (no matching data types) : ", err)
+			// 	// 	return
+			// 	// }
+			// }
 		}
 	}
 }

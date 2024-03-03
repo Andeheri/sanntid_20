@@ -6,7 +6,6 @@ import (
 	"project/commontypes"
 	"project/slave/elevio"
 	"project/slave/fsm"
-	"project/slave/iodevice"
 	"project/slave/mastercom"
 	"time"
 )
@@ -31,7 +30,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 	masterRequests := make(chan commontypes.AssignedRequests)
 	requestedState := make(chan struct{})
 	sender := make(chan interface{})
-	allLights := make(chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int)
+	hallLights := make(chan commontypes.Lights)
 
 	masterChans := mastercom.MasterChannels{
 		ButtonPress:    buttonPress,
@@ -39,7 +38,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 		MasterRequests: masterRequests,
 		RequestedState: requestedState,
 		Sender:         sender,
-		AllLights:   allLights,
+		HallLights:   hallLights,
 	}
 
 	fsm.Init(doorTimer, masterChans.ClearRequest)
@@ -101,7 +100,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 			fmt.Println(a, "sender state til master")
 			mastercom.SendState(sender)
 
-		case a := <-masterChans.AllLights:
+		case a := <-masterChans.HallLights:
 			fmt.Println(a, "mottat all lights melding")
 			fsm.Elev.HallLights = a
 			fsm.SetAllLights(fsm.Elev)

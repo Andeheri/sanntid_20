@@ -2,6 +2,7 @@ package elevator
 
 import (
 	"fmt"
+	"project/commontypes"
 	"project/slave/elevio"
 	"project/slave/iodevice"
 	"time"
@@ -31,7 +32,7 @@ type Elevator struct {
 	Obstructed bool
 	DoorTimer time.Timer
     Requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
-	HallLights[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
+	HallLights commontypes.Lights
     Behaviour ElevatorBehaviour
 	Config Config 
 }
@@ -84,6 +85,7 @@ func Initialize() Elevator{
             ClearRequestVariant: CV_InDirn,
             DoorOpenDuration_s: 3*time.Second,
         },
+		HallLights: commontypes.Lights{{false, false}, {false, false}, {false, false}, {false, false}},
     }
 }
 

@@ -34,8 +34,8 @@ func Init(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
 
 func SetAllLights(es elevator.Elevator){
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
-        for btn := elevio.ButtonType(0); btn < iodevice.N_BUTTONS; btn++{
-            outputDevice.RequestButtonLight(btn, floor, es.HallLights[floor][btn]!=0);
+        for btn := elevio.ButtonType(0); btn < 2; btn++{
+            outputDevice.RequestButtonLight(btn, floor, es.HallLights[floor][btn]);
         }
     }
     for floor := 0; floor < iodevice.N_FLOORS; floor++{

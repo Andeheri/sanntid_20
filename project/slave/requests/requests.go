@@ -166,7 +166,7 @@ func ClearAtCurrentFloor(e elevator.Elevator, clearRequest chan<- elevio.ButtonE
 
 func clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clearRequest chan<- elevio.ButtonEvent) (elevator.Elevator){
     e.Requests[floor][btnType] = 0
-    e.HallLights[floor][btnType] = 0
+    e.HallLights[floor][btnType] = false
     clearRequest <- elevio.ButtonEvent{Floor: floor, Button: btnType}
     return e
 }
