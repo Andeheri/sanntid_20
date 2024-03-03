@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 	"project/commontypes"
 	"project/slave/elevio"
 	"project/slave/fsm"
@@ -21,7 +22,12 @@ type MasterChannels struct {
 	Sender chan interface{}
 }
 
-var hallRequests commontypes.HallRequests
+var hallRequests = commontypes.HallRequests{
+	{true, false},
+	{false, true},
+	{true, false},
+	{false, true},
+}
 
 func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan bool) {
 
@@ -30,6 +36,21 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 		fmt.Println("Error connecting to master:", err)
 		return
 	}
+	defer masterConn.Close()
+
+    // Set a deadline for the connection
+    deadline := time.Now().Add(10000 * time.Second) // Adjust timeout as needed
+    err = masterConn.SetDeadline(deadline)
+    if err != nil {
+        fmt.Println("Error setting deadline:", err)
+        return
+    }
+    // Send data to the server
+    _, err = masterConn.Write([]byte("Hello, server!"))
+    if err != nil {
+        fmt.Println("Error sending data:", err)
+        return
+    }
 
 	go Receiver(masterConn, chans, stopch)
 	go Sender(masterConn, chans.Sender, stopch)
@@ -61,11 +82,12 @@ func SendState(sender chan<- interface{}) {
 	fmt.Println("Sender state", state)
 
 	sender <- state
+	sender <- hallRequests
 }
 
 func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan bool) {
 
-	// buffer := make([]byte, 1024)
+	buffer := make([]byte, 1024)
 
 	for {
 		select {
@@ -74,22 +96,24 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan bool
 		default:
 		
 
-		// // Read data from the master
-		// n, err := masterConn.Read(buffer)
-		// if err != nil {
-		// 	fmt.Println("Error:", err)
-		// 	return
-		// }
+		// Read data from the master
+		n, err := masterConn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
 
-		// var requests commontypes.AssignedRequests
+		var requests commontypes.AssignedRequests
 		// var requestedState commontypes.RequestState
 		// var requestedHallRequests commontypes.RequestHallRequests
 		// var allLights commontypes.Lights
+
 		
 
-		// if err = json.Unmarshal(buffer[:n], &requests); err == nil {
-		// 	chans.MasterRequests <- requests
-		// } else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
+		if err = json.Unmarshal(buffer[:n], &requests); err == nil {
+			chans.MasterRequests <- requests
+			fmt.Println("MasterRequests melding mottatt")
+		} //else if err = json.Unmarshal(buffer[:n], &requestedState); err == nil {
 		// 	chans.RequestedState <- requestedState
 		// } else if err = json.Unmarshal(buffer[:n], &requestedHallRequests); err == nil {
 		// 	chans.Sender <- requestedCommunityState
@@ -100,8 +124,10 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan bool
 		// 	return
 		// }
 		}
+		}
 	}
-}
+
+
 
 func Sender(masterConn *net.TCPConn, ch <-chan interface{}, stopch <-chan bool) {
 	for {

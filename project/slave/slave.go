@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func start(initalMasterAddress string, masterAddress <-chan string) {
+func Start(initialMasterAddress string, masterAddress <-chan string) {
 	numFloors := 4
 
 	elevio.Init("localhost:15657", numFloors)
@@ -45,11 +45,13 @@ func start(initalMasterAddress string, masterAddress <-chan string) {
 	fsm.Init(doorTimer, masterChans.ClearRequest)
 
 	stopMaster := make(chan bool)
-	TCPAddr, err := net.ResolveTCPAddr("tcp", initalMasterAddress)
+	TCPAddr, err := net.ResolveTCPAddr("tcp", initialMasterAddress)
 	if err != nil {
 		fmt.Println("Error resolving TCP address from master:", err)
 	}
 	go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
+
+	mastercom.SendState(masterChans.Sender)
 
 	for {
 		select {
