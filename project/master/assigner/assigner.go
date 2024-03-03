@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"project/commontypes"
-	"project/master/slavecomm"
 	"runtime"
 )
 
@@ -51,7 +50,7 @@ func Assign(state *CommunityState) *map[string]commontypes.AssignedRequests {
 		return nil
 	}
 
-	output := new(map[string][][2]bool)
+	output := new(map[string]commontypes.AssignedRequests)
 	err = json.Unmarshal(ret, &output)
 	if err != nil {
 		fmt.Println("json.Unmarshal error: ", err)
@@ -59,73 +58,4 @@ func Assign(state *CommunityState) *map[string]commontypes.AssignedRequests {
 	}
 
 	return output
-}
-
-var syncState struct {
-	syncing bool
-	button  int
-	floor   int
-	pending map[string]struct{} //Only using the keys. values are empty
-}
-
-var communityState CommunityState
-var ipToSendCh map[string]chan interface{}
-
-func Start(newSlaveCh chan string, readSlaveCh chan slavecomm.SlaveMessage) {
-	ipToSendCh = make(map[string]chan interface{})
-	syncState.pending = make(map[string]struct{})
-
-	for {
-		//TODO: handle new slave, and remove slave, and quit?
-
-		message := <-readSlaveCh
-
-		switch message.Payload.(type) {
-		case commontypes.ElevatorState:
-			_, sendChExists := ipToSendCh[message.Addr]
-			if !sendChExists {
-				ipToSendCh[message.Addr] = make(chan interface{})
-			}
-
-			communityState.States[message.Addr] = message.Payload.(community.ElevatorState)
-
-			delete(syncState.pending, message.Addr)
-
-		case community.ButtonEvent:
-			//if hall button:
-			buttonEvent := message.Payload.(community.ButtonEvent)
-			//start syncing:
-			syncState.syncing = true
-			syncState.pending = make(map[string]struct{})
-			syncState.button = buttonEvent.Button
-			syncState.floor = buttonEvent.Floor
-
-			//sync button first
-
-			//then request info from all slaves
-			//mark all slaves as pending
-			for IP := range ipToSendCh {
-				syncState.pending[IP] = struct{}{}
-			}
-
-		case community.OrderComplete:
-			orderComplete := message.Payload.(community.OrderComplete)
-			communityState.HallRequests[orderComplete.Floor][orderComplete.Button] = false
-		}
-
-		if syncState.syncing && len(syncState.pending) == 0 {
-			//button light syncing complete
-			syncState.syncing = false
-
-			communityState.HallRequests[syncState.floor][syncState.button] = true
-
-			orders := *Assign(&communityState)
-			for IP, order := range orders {
-				//TODO: update button light information
-				ipToSendCh[IP] <- order
-			}
-
-		}
-
-	}
 }

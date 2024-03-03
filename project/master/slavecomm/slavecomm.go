@@ -15,6 +15,12 @@ type SlaveMessage struct {
 	Payload interface{}
 }
 
+type ConnectionEvent struct {
+	Connected bool
+	Addr string
+	Ch chan interface{}
+}
+
 type sendRequest struct {
 	msg     SlaveMessage
 	errorCh chan error
@@ -188,7 +194,7 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 				continue
 			}
 
-			objectPtr, err := ttj.ToObject(
+			object, err := ttj.ToObject(
 				reflect.TypeOf(commontypes.ElevatorState{}),
 				reflect.TypeOf(commontypes.ButtonPressed{}),
 				reflect.TypeOf(commontypes.OrderComplete{}),
@@ -203,7 +209,7 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 
 			fromSlaveCh <- SlaveMessage{
 				Addr:    slaveAddr,
-				Payload: objectPtr,
+				Payload: object,
 			}
 
 		}

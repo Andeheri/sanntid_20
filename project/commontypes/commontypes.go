@@ -21,10 +21,28 @@ type ButtonPressed struct {
 type OrderComplete ButtonPressed
 
 type Lights [][2]bool
-type HallRequests [][2]bool
 type AssignedRequests [][2]bool
+type HallRequests [][2]bool
 
-type SyncOK struct{}
+func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
+	if len(*hr1) != len(*hr2) {
+		return fmt.Errorf("HallRequests length mismatch")
+	}
+	for i := range *hr1 {
+		(*hr1)[i][0] = (*hr1)[i][0] || (*hr2)[i][0]
+		(*hr1)[i][1] = (*hr1)[i][1] || (*hr2)[i][1]
+	}
+	return nil
+}
+
+type SyncRequests struct {
+	Requests HallRequests
+	Id       int
+}
+
+type SyncOK struct {
+	Id int
+}
 
 type RequestState struct{}
 type RequestHallRequests struct{}
