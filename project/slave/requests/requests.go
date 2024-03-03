@@ -114,9 +114,6 @@ func ClearAtCurrentFloor(e elevator.Elevator, clearRequest chan<- elevio.ButtonE
     case elevator.CV_All:
         for btn := 0; btn < iodevice.N_BUTTONS; btn++{
             e = clear(e, e.Floor, elevio.ButtonType(btn), clearRequest)
-            // e.Requests[e.Floor][btn] = 0
-            // e.AllLights[e.Floor][btn] = 0
-            // clearRequest <- elevio.ButtonEvent{Floor: e.Floor, Button: elevio.BT_HallUp}
         }
  
         
@@ -128,34 +125,22 @@ func ClearAtCurrentFloor(e elevator.Elevator, clearRequest chan<- elevio.ButtonE
         case elevio.MD_Up:
             if(!above(e) && e.Requests[e.Floor][elevio.BT_HallUp] == 0){
                 e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
-                // e.Requests[e.Floor][elevio.BT_HallDown] = 0;
-                // clearRequest <- elevio.ButtonEvent{Floor: e.Floor, Button: elevio.BT_HallDown}
             }
             e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
-            // e.Requests[e.Floor][elevio.BT_HallUp] = 0;
-            // clearRequest <- elevio.ButtonEvent{Floor: e.Floor, Button: elevio.BT_HallUp}
  
             
         case elevio.MD_Down:
             if(!below(e) && e.Requests[e.Floor][elevio.BT_HallDown] == 0){
                 e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
-                // e.Requests[e.Floor][elevio.BT_HallUp] = 0;
-                // clearRequest <- elevio.ButtonEvent{Floor: e.Floor, Button: elevio.BT_HallUp}
             }
             e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
-            // e.Requests[e.Floor][elevio.BT_HallDown] = 0;
-            // clearRequest <- elevio.ButtonEvent{Floor: e.Floor, Button: elevio.BT_HallDown}
-
             
         case elevio.MD_Stop:
+            e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
+            e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
         default:
             e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
             e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
-            // e.Requests[e.Floor][elevio.BT_HallUp] = 0;
-            // e.Requests[e.Floor][elevio.BT_HallDown] = 0;
-            // clearRequest <- elevio.ButtonEvent{Floor: e.Floor, Button: elevio.BT_HallUp}
-            // clearRequest <- elevio.ButtonEvent{Floor: e.Floor, Button: elevio.BT_HallDown}
-
         }
  
     default:
