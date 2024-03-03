@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func Start(initialMasterAddress string, masterAddress <-chan string, quit chan bool) {
+func Start(initialMasterAddress string, masterAddress <-chan string, quit chan struct{}) {
 	numFloors := 4
 
 	elevio.Init("localhost:15657", numFloors)
@@ -29,7 +29,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan b
 	buttonPress := make(chan elevio.ButtonEvent)
 	clearRequest := make(chan elevio.ButtonEvent)
 	masterRequests := make(chan commontypes.AssignedRequests)
-	requestedState := make(chan bool)
+	requestedState := make(chan struct{})
 	sender := make(chan interface{})
 	allLights := make(chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int)
 
@@ -44,7 +44,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan b
 
 	fsm.Init(doorTimer, masterChans.ClearRequest)
 
-	stopMaster := make(chan bool)
+	stopMaster := make(chan struct{})
 	TCPAddr, err := net.ResolveTCPAddr("tcp", initialMasterAddress)
 	if err != nil {
 		fmt.Println("Error resolving TCP address from master:", err)
@@ -54,7 +54,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan b
 	a := <- quitSlave
 	fmt.Println(a, "failed connection to master")
 	if a {
-		quit <- true
+		quit <- struct{}{}
 		return
 	}
 
@@ -83,7 +83,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan b
 			fsm.OnDoorTimeout(doorTimer, masterChans.ClearRequest)
 
 		case a := <-masterAddress:
-			stopMaster <- true
+			stopMaster <- struct{}{}
 			fmt.Println("mottat master addresse:", a)
 			TCPAddr, err := net.ResolveTCPAddr("tcp", a)
 			if err != nil {
@@ -108,9 +108,8 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan b
 			
 		case a := <-quitSlave:
 			fmt.Println(a, "quit slave melding")
-			quit <- true
+			quit <- struct{}{}
 			return
 		}
-
 	}
 }

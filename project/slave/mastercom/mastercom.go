@@ -9,6 +9,7 @@ import (
 	"project/slave/fsm"
 	"project/slave/iodevice"
 	"time"
+	"reflect"
 )
 
 type MasterChannels struct {
@@ -17,7 +18,7 @@ type MasterChannels struct {
 
 	MasterRequests chan commontypes.AssignedRequests
 	AllLights      chan [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
-	RequestedState chan bool
+	RequestedState chan struct{}
 
 	Sender chan interface{}
 }
@@ -29,7 +30,7 @@ var hallRequests = commontypes.HallRequests{
 	{false, true},
 }
 
-func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan bool, quitSlave chan<- bool) {
+func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan struct{}, quitSlave chan<- bool) {
 
 	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
 	if err != nil {
@@ -89,7 +90,7 @@ func SendState(sender chan<- interface{}) {
 	sender <- hallRequests
 }
 
-func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan bool) {
+func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan struct{}) {
 
 	buffer := make([]byte, 1024)
 
@@ -106,8 +107,31 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan bool
 				return
 			}
 
-			var test int
+			// var ttj commontypes.TypeTaggedJSON
 
+			// var dataType reflect.Type
+
+			// switch ttj.TypeId {
+			// case "commontypes.RequestState":
+			// 	SendState(chans.Sender)
+			// case "commontypes.RequestHallRequests":
+			// 	dataType = reflect.TypeOf(commontypes.ButtonPressed{})
+			// case "commontypes.HallRequests":
+			// 	dataType = reflect.TypeOf(commontypes.HallRequests{})
+			// case "commontypes.SyncOK":
+			// 	dataType = reflect.TypeOf(commontypes.SyncOK{})
+			// default:
+			// 	fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
+			// 	continue
+			// }
+
+			// dataValue := reflect.New(dataType)
+			// err = json.Unmarshal(ttj.JSON, dataValue.Interface())
+			// if err != nil {
+			// 	fmt.Println("payload (JSON) of TCP Package is invalid", err)
+			// 	continue
+			// }
+			var test int
 			if err = json.Unmarshal(buffer[:n], &test); err == nil {
 				switch test {
 				case 1:
@@ -144,21 +168,29 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan bool
 	}
 }
 
-func Sender(masterConn *net.TCPConn, ch <-chan interface{}, stopch <-chan bool) {
+func Sender(masterConn *net.TCPConn, ch <-chan interface{}, stopch <-chan struct{}) {
 	for {
 		select {
 		case data := <-ch:
-			jsonBytes, err := json.Marshal(data)
+			jsonBytesPayload, err := json.Marshal(data)
 			if err != nil {
 				fmt.Println("json.Marshal error: ", err)
-				return
+				continue
+			}
+			tcpPackage := commontypes.TypeTaggedJSON{
+				TypeId: reflect.TypeOf(data).String(),
+				JSON:   jsonBytesPayload,
 			}
 
-			_, err = masterConn.Write(jsonBytes)
+			jsonBytesPackage, err := json.Marshal(tcpPackage)
 			if err != nil {
-				fmt.Println("Error:", err)
+				fmt.Println("json.Marshal error: ", err)
+				continue
+			}
+			_, err = masterConn.Write(jsonBytesPackage)
+			if err != nil {
+				fmt.Println("net.Write Error:", err)
 				return
-
 			}
 		case <-stopch:
 			return
