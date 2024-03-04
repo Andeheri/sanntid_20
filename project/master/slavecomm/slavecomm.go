@@ -133,6 +133,8 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage, connec
 				Addr:    slaveAddr,
 				Payload: object,
 			}
+
+			//TODO: fix this: the timer fixes the deadlock, but it looses the message
 			select {
 			case fromSlaveCh <- sm:
 			case <-time.After(1 * time.Second):

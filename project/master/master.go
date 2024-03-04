@@ -14,7 +14,7 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 
 	const floorCount int = 4
 	communityState := assigner.CommunityState{}
-	communityState.HallRequests = make([][2]bool, floorCount)
+	communityState.HallRequests = make(commontypes.HallRequests, floorCount)
 
 	slaveChans := make(map[string]chan interface{})
 	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
@@ -86,6 +86,11 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 					syncPending[addr] = struct{}{}
 					ch <- syncRequests
 				}
+
+				//TEST. REMOVE AFTER TESTING
+				assignedOrder := make(commontypes.AssignedRequests, floorCount)
+				assignedOrder[buttonPressed.Floor][buttonPressed.Button] = true
+				slaveChans[message.Addr] <- assignedOrder
 
 				//TODO: create timeout
 
