@@ -113,7 +113,10 @@ func SendKeepAliveMessage(local_IP string, delta_t time.Duration) {
 	for{
 		bcastAddr = getBroadcastAddr(localIP, UDP_PORT)
 		if bcastAddr != nil {
-			bcastConn.WriteTo([]byte(local_IP+": "+Keep_alive), bcastAddr)
+			_, e := bcastConn.WriteTo([]byte(local_IP+": "+Keep_alive), bcastAddr)
+			if e != nil {
+				fmt.Printf("Error when broadcasting: %+v", e)
+			}
 		}
 		time.Sleep(delta_t)
 	}
@@ -124,7 +127,7 @@ func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, kee
 	aliveMap := make(map[string]struct{})  // IP-addresses that sent keep-alive over UDP
 	timer := time.NewTicker(delta_t)  // Timer to check for keep-alive messages
 	defer timer.Stop()
-
+	
 	for {
 		select {
 		case ip_addr := <-keep_alive_receive_channel:
@@ -149,7 +152,8 @@ func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, kee
 				}
 			}
 			// Check if disconnected
-			if len(knownMap) == len(not_responding) {
+			if len(knownMap) == 0 {
+				fmt.Println("Disconnected")
 			}
 			for _, ip := range not_responding {
 				keep_alive_transmit_channel <- ip  // Transmit dead IP's to main thread

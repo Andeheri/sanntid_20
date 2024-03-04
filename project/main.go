@@ -66,7 +66,6 @@ func main() {
 					// Update IP-address-list and see if new master should be elected
 					// Send IP-address to keep-alive-tracker
 					keepAliveTrackerRecieverChannel <- IP_Addr_sender
-
 					_, exists := ip_address_map[IP_Addr_sender]
 					ip_address_map[IP_Addr_sender] = struct{}{}
 					if (!exists){  // If it is a new elevator
