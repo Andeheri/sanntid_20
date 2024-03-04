@@ -42,12 +42,13 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 	defer masterConn.Close()
 
 	// Set a deadline for the connection
-	deadline := time.Now().Add(120 * time.Second)
+	deadline := time.Now().Add(1200 * time.Second)
 	err = masterConn.SetDeadline(deadline)
 	if err != nil {
 		fmt.Println("Error setting deadline:", err)
 		return
 	}
+	masterConn.SetNoDelay(false)
 
 	go Receiver(masterConn, chans, stopch)
 	go Sender(masterConn, chans.Sender, stopch)
@@ -109,6 +110,7 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan stru
 				reflect.TypeOf(commontypes.RequestState{}),
 				reflect.TypeOf(commontypes.RequestHallRequests{}),
 				reflect.TypeOf(commontypes.HallRequests{}),
+				reflect.TypeOf(commontypes.SyncRequests{}),
 				reflect.TypeOf(commontypes.Lights{}),
 				reflect.TypeOf(commontypes.AssignedRequests{}),
 			)
@@ -120,15 +122,20 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan stru
 
 			switch reflect.TypeOf(object) {
 			case reflect.TypeOf(commontypes.RequestState{}):
+				fmt.Println("State requested")
 				chans.RequestedState <- struct{}{}
 			case reflect.TypeOf(commontypes.RequestHallRequests{}):
+				fmt.Println("Requested Hallrequests")
 				chans.Sender <- hallRequests
 			case reflect.TypeOf(commontypes.SyncRequests{}):
+				fmt.Println("Received Syncrequests")
 				hallRequests = object.(commontypes.SyncRequests).Requests
 				chans.Sender <- commontypes.SyncOK{Id: object.(commontypes.SyncRequests).Id}
 			case reflect.TypeOf(commontypes.Lights{}):
+				fmt.Println("Received halllights")
 				chans.HallLights <- object.(commontypes.Lights)
 			case reflect.TypeOf(commontypes.AssignedRequests{}):
+				fmt.Println("Received assigned requests")
 				chans.MasterRequests <- object.(commontypes.AssignedRequests)
 			default:
 				fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
