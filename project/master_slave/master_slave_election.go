@@ -2,6 +2,7 @@ package master_slave
 
 import (
 	. "elevator/constants"
+	"fmt"
 	. "fmt"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ func Election(localIP string, mseCh chan<- MSE_type, updatedIPAddressCh <-chan m
 	last_role := Unknown
 
 	for ip_address_map := range updatedIPAddressCh {
+		fmt.Printf("Master-slave election: %v\n", ip_address_map)
 		role := Unknown
 		if len(ip_address_map) == 0 {  // Elevator is disconnected
 			last_role = Master
