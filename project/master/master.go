@@ -15,6 +15,11 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 	communityState := assigner.CommunityState{}
 
 	slaveChans := make(map[string]chan interface{})
+	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
+	//TODO: deal with that
+
+    //Should we have a separate map for hiredSlaves so that we do not attempt to sync and so on with slaves that are still in the application process?
+    //Maybe make a map containing structs that have a channel and a bool for hired or not?
 
 	applicantSlaves := make(map[string]*time.Timer)
 	applicationTimeoutCh := make(chan string)

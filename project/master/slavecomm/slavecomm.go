@@ -2,12 +2,10 @@ package slavecomm
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"project/commontypes"
 	"reflect"
-	"time"
 )
 
 type SlaveMessage struct {
@@ -17,94 +15,8 @@ type SlaveMessage struct {
 
 type ConnectionEvent struct {
 	Connected bool
-	Addr string
-	Ch chan interface{}
-}
-
-type sendRequest struct {
-	msg     SlaveMessage
-	errorCh chan error
-}
-
-type getSlavesRequest struct {
-	returnCh chan []string
-}
-
-type addSlaveRequest struct {
-	addr string
-	ch   chan interface{}
-}
-type removeSlaveRequest struct {
-	addr string
-}
-
-var managerCh chan interface{}
-
-func Send(addr string, data interface{}, timeoutms int) error {
-
-	request := sendRequest{
-		msg: SlaveMessage{
-			Addr:    addr,
-			Payload: data,
-		},
-		errorCh: make(chan error),
-	}
-
-	managerCh <- request
-	select {
-	case err := <-request.errorCh:
-		if err != nil {
-			return err
-		}
-		return nil
-
-	case <-time.After(time.Duration(timeoutms) * time.Millisecond):
-		return errors.New("slavecomm.Send() Timeout")
-	}
-
-}
-
-func Slaves(timeoutms int) ([]string, error) {
-
-	request := getSlavesRequest{
-		returnCh: make(chan []string),
-	}
-
-	managerCh <- request
-
-	select {
-	case slaves := <-request.returnCh:
-		return slaves, nil
-	case <-time.After(time.Duration(timeoutms) * time.Millisecond):
-		return nil, errors.New("slavecomm.Slaves() Timeout")
-	}
-}
-
-func Manager() {
-	addrToCh := make(map[string]chan interface{})
-	managerCh = make(chan interface{})
-
-	for request := range managerCh {
-		switch req := request.(type) {
-		case sendRequest:
-			addrToCh[req.msg.Addr] <- req.msg.Payload
-			fmt.Println("Sent to", req.msg.Addr)
-			req.errorCh <- nil
-			fmt.Println("Returned nil error")
-		case getSlavesRequest:
-			slaves := make([]string, 0, len(addrToCh))
-			for addr := range addrToCh {
-				slaves = append(slaves, addr)
-			}
-			req.returnCh <- slaves
-		case removeSlaveRequest:
-			delete(addrToCh, req.addr)
-		case addSlaveRequest:
-			addrToCh[req.addr] = req.ch
-		default:
-			fmt.Println("ERROR: Unknown manager request")
-		}
-	}
+	Addr      string
+	Ch        chan interface{}
 }
 
 func Listener(port int, fromSlaveCh chan SlaveMessage) {
@@ -146,8 +58,6 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 	toSlaveCh := make(chan interface{})
 
 	managerCh <- addSlaveRequest{addr: slaveAddr, ch: toSlaveCh}
-
-	//TODO: request slave's hall requests
 
 	defer func() {
 		slaveConn.Close()
