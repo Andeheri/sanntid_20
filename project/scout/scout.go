@@ -153,7 +153,7 @@ func TrackMissedKeepAliveMessages(delta_t time.Duration, num_keep_alive int, kee
 			}
 			// Check if disconnected
 			if len(knownMap) == 0 {
-				fmt.Println("Disconnected")
+				
 			}
 			for _, ip := range not_responding {
 				keep_alive_transmit_channel <- ip  // Transmit dead IP's to main thread

@@ -23,6 +23,13 @@ func Election(localIP string, mseCh chan<- MSE_type, updatedIPAddressCh <-chan m
 	last_role := Unknown
 
 	for ip_address_map := range updatedIPAddressCh {
+		role := Unknown
+		if len(ip_address_map) == 0 {  // Elevator is disconnected
+			last_role = Master
+			last_highest_ip = "127.0.0.1" // Loopback address (Always smaller than a regular IP)
+			mseCh <- MSE_type{Role: Master, IP: "127.0.0.1"}
+			continue
+		}
 		// Possibly need to update role or master to connect to
 		for ip_address := range ip_address_map {
 			ip_address_int := IPToNum(ip_address)
@@ -33,7 +40,6 @@ func Election(localIP string, mseCh chan<- MSE_type, updatedIPAddressCh <-chan m
 		}
 
 		if (highest_ip_string != last_highest_ip){
-			role := Unknown
 			if (highest_ip_string == localIP){
 				role = Master
 			}else{
