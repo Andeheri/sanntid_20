@@ -19,7 +19,7 @@ type ConnectionEvent struct {
 	Ch        chan interface{}
 }
 
-func Listener(port int, fromSlaveCh chan SlaveMessage) {
+func Listener(port int, fromSlaveCh chan SlaveMessage, connectionEventCh chan ConnectionEvent) {
 
 	localAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -42,12 +42,12 @@ func Listener(port int, fromSlaveCh chan SlaveMessage) {
 			continue
 		}
 
-		go handleSlave(slaveConn, fromSlaveCh)
+		go handleSlave(slaveConn, fromSlaveCh, connectionEventCh)
 	}
 
 }
 
-func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
+func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage, connectionEventCh chan<- ConnectionEvent) {
 
 	fmt.Println("Connected to", slaveConn.RemoteAddr().String())
 
@@ -57,11 +57,8 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 	quitCh := make(chan struct{})
 	toSlaveCh := make(chan interface{})
 
-	managerCh <- addSlaveRequest{addr: slaveAddr, ch: toSlaveCh}
-
 	defer func() {
 		slaveConn.Close()
-		managerCh <- removeSlaveRequest{addr: slaveAddr}
 	}()
 
 	go tcpReader(slaveConn, tcpReadCh, quitCh)

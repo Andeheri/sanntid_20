@@ -1,21 +1,16 @@
 package main
 
 import (
-	"fmt"
+	"project/master"
 	"project/master/slavecomm"
-	"reflect"
 )
 
 func main() {
-	go slavecomm.Manager()
 
-	testch := make(chan slavecomm.SlaveMessage)
-	go slavecomm.Listener(12221, testch)
-
-	for {
-		data := <-testch
-		fmt.Println(reflect.TypeOf(data.Payload), data.Payload)
-	}
+	masterCh := make(chan slavecomm.SlaveMessage)
+	connEventCh := make(chan slavecomm.ConnectionEvent)
+	go slavecomm.Listener(12221, masterCh, connEventCh)
+	go master.Run(masterCh, connEventCh)
 
 	select {}
 }
