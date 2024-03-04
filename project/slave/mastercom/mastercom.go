@@ -122,10 +122,10 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan stru
 
 			switch reflect.TypeOf(object) {
 			case reflect.TypeOf(commontypes.RequestState{}):
-				fmt.Println("State requested")
+				fmt.Println("State requested by master")
 				chans.RequestedState <- struct{}{}
 			case reflect.TypeOf(commontypes.RequestHallRequests{}):
-				fmt.Println("Requested Hallrequests")
+				fmt.Println("Master requested Hallrequests")
 				chans.Sender <- hallRequests
 			case reflect.TypeOf(commontypes.SyncRequests{}):
 				fmt.Println("Received Syncrequests")
