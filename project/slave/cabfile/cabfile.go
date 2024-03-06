@@ -30,7 +30,7 @@ func Read() []int {
 		fmt.Println("Error reading from primary file:", err)
 		// Try reading from backup file
 		fileData, err = os.ReadFile(cabsBackup)
-		if err != nil {
+		if err != nil || len(string(fileData)) != iodevice.N_FLOORS{
 			fmt.Println("Error reading from backup file:", err)
 			return nil
 		}
@@ -79,7 +79,7 @@ func Set(floor int) error {
 	if err := writeToFiles(data); err != nil {
 		return err
 	}
-	fmt.Println("Cabdata written successfully to files.")
+	fmt.Println("Cabdata written successfully to files, (set).")
 	return nil
 }
 
@@ -92,7 +92,7 @@ func Clear(floor int) error {
 	if err := writeToFiles(data); err != nil {
 		return err
 	}
-	fmt.Println("Cabdata written successfully to files.")
+	fmt.Println("Cabdata written successfully to files, (cleared).")
 	return nil
 }
 

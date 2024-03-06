@@ -16,7 +16,7 @@ var Elev elevator.Elevator = elevator.Initialize()
 var outputDevice iodevice.ElevOutputDevice
 
 
-func Init(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
+func Init(doorTimer *time.Timer, clearRequest chan<- interface{}){
     outputDevice = iodevice.Elevio_getOutputDevice()
 
     // Code for fixing starting position between or below floors
@@ -35,7 +35,6 @@ func Init(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
     cabRequests := cabfile.Read()
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
         if cabRequests[floor] != 0{
-            // Elev.Requests[floor][elevio.BT_Cab] = 1
             OnRequestButtonPress(floor, elevio.BT_Cab, doorTimer, clearRequest)
         }
     }
@@ -53,7 +52,7 @@ func SetAllLights(es *elevator.Elevator){
 }
 
 
-func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
+func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequest chan<-interface{}){
     fmt.Printf("\n(%d, %s)\n", btn_floor, iodevice.Elevio_button_toString(btn_type))
     Elev.Print()
     
@@ -125,7 +124,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 
 
 
-func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
+func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- interface{}){
     fmt.Printf("\n(newfloor: %d)\n",newFloor)
     Elev.Print();
 
@@ -155,7 +154,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- ele
 
 
 
-func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
+func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan<- interface{}){
     fmt.Println("\n(doorTimeout)")
     
     Elev.Print();
@@ -205,7 +204,7 @@ func RequestsClearAll(){
 }
 
 // call fsm button press for the restructured list of orders from master.?
-func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent) {
+func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, clearRequest chan<- interface{}) {
     //fsm on butonpress for loop
     for btn := 0; btn < 2; btn++{
         for floor := 0; floor < iodevice.N_FLOORS; floor++{
