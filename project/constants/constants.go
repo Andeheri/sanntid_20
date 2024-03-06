@@ -1,5 +1,9 @@
 package constants
 
+import (
+	"time"
+)
+
 type Role string
 
 // Master-slave states
@@ -7,11 +11,6 @@ const (
 	Master  Role = "master"
 	Slave   Role = "slave"
 	Unknown Role = "unknown"
-)
-
-// UDP commands
-const (
-	Keep_alive string = "keep_alive"
 )
 
 type FromMSE struct {
@@ -26,5 +25,10 @@ type ToMSE struct {
 }
 
 const (
-	UDP_PORT = 23456
+	UDPPort               int           = 23456
+	MasterPort            string        = "1861"
+	DeltaTKeepAlive       time.Duration = 100 * time.Millisecond
+	DeltaTMissedKeepAlive time.Duration = 50 * time.Millisecond
+	NumKeepAlive          int           = 5 // Number of missed keep-alive messages missed before assumed offline
+	LoopbackIp            string        = "127.0.0.1"
 )

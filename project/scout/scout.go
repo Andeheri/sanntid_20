@@ -4,20 +4,20 @@ import (
 	"bytes"
 	. "elevator/constants"
 	"elevator/scout/conn"
-	"elevator/master_slave"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
 
-var localIP string
+var localIP string = LoopbackIp
 
 func LocalIP() (string, error) {
-	if (localIP == "") {
+	if (localIP == LoopbackIp) {
 		conn, err := net.DialTCP("tcp4", nil, &net.TCPAddr{IP: []byte{8, 8, 8, 8}, Port: 53})
 		if err != nil {
-			return "", err
+			return LoopbackIp, err
 		}
 		defer conn.Close()
 		localIP = strings.Split(conn.LocalAddr().String(), ":")[0]
@@ -73,14 +73,14 @@ func getBroadcastAddr(localIP string, UDP_PORT int) *net.UDPAddr {
 func ListenForInfo(recieve_broadcast_channel chan<- string) {
 	const bufSize = 1024
 
-	conn := conn.DialBroadcastUDP(UDP_PORT)
+	conn := conn.DialBroadcastUDP(UDPPort)
 	defer conn.Close()
 
 	for {
 		buff := make([]byte, bufSize)
 		_, _, e := conn.ReadFrom(buff)
 		if e != nil {
-			fmt.Printf("Error when recieving with UDP on port %d: \"%+v\"\n", UDP_PORT, e)
+			fmt.Printf("Error when recieving with UDP on port %d: \"%+v\"\n", UDPPort, e)
 		} else {
 			// Trim trailing \0
 			index := bytes.IndexByte(buff, 0)
@@ -99,12 +99,13 @@ func ListenForInfo(recieve_broadcast_channel chan<- string) {
 
 func SendKeepAliveMessage(deltaT time.Duration) {
 	// Sends keep-alive messages, updating all elevators that it is active, and maybe trigger a reelection of master
-	bcastConn := conn.DialBroadcastUDP(UDP_PORT)
+	bcastConn := conn.DialBroadcastUDP(UDPPort)
 	defer bcastConn.Close()
-	localIP, _ := LocalIP()
+
 	var bcastAddr *net.UDPAddr
-	for{
-		bcastAddr = getBroadcastAddr(localIP, UDP_PORT)
+	for {
+		localIP, _ := LocalIP()
+		bcastAddr = getBroadcastAddr(localIP, UDPPort)
 		if bcastAddr != nil {
 			_, e := bcastConn.WriteTo([]byte(localIP), bcastAddr)
 			if e != nil {
@@ -157,10 +158,78 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 			if hasChanged{
 				localIP, _ := LocalIP()
 				// Run master slave election
-				copyKnownMap := master_slave.MakeDeepCopyMap[string, int](knownMap)
+				copyKnownMap := MakeDeepCopyMap(knownMap)
 				mseUpdatedIPMapChannel <- ToMSE{LocalIP: localIP, IPAddressMap: copyKnownMap}
 			}
 			hasChanged = false
 		}
 	}
+}
+
+func IPToNum(ipAddress string) int {
+	ip_as_string := strings.Join(strings.Split(ipAddress, "."), "")
+	ip_as_num, err := strconv.Atoi(ip_as_string)
+	if err != nil {
+		fmt.Printf("Error when casting IP address to num.\n")
+	}
+	return ip_as_num
+}
+
+func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) {
+	var highestIPInt int = 0
+	var highestIPString string = "0.0.0.0"
+	lastHighestIP := ""
+	lastRole := Unknown
+
+	for mseData := range updatedIPAddressCh {
+		localIP := mseData.LocalIP
+		IPAddressMap := mseData.IPAddressMap
+		fmt.Printf("Master-slave election: %v\n", IPAddressMap)
+		role := Unknown
+		highestIPInt = 0
+		if len(IPAddressMap) == 0 || localIP == "" { // Elevator is disconnected
+			lastRole = Master
+			lastHighestIP = "127.0.0.1" // Loopback address (Always smaller than a regular IP)
+			mseCh <- FromMSE{Role: Master, IP: "127.0.0.1", IPAddressMap: IPAddressMap}
+			continue
+		}
+
+		for ipAddress := range IPAddressMap {
+			ipAddressInt := IPToNum(ipAddress)
+			if ipAddressInt > highestIPInt {
+				highestIPString = ipAddress
+				highestIPInt = ipAddressInt
+			}
+		}
+
+		if highestIPString != lastHighestIP {
+			if highestIPString == localIP {
+				role = Master
+			} else {
+				role = Slave
+			}
+			// Check if a change in roles needs to take place
+			if lastRole != role || lastHighestIP != highestIPString {
+				lastRole = role
+				lastHighestIP = highestIPString
+				mseCh <- FromMSE{Role: role, IP: highestIPString, IPAddressMap: IPAddressMap}
+			}
+		}
+	}
+}
+
+func MakeDeepCopyMap[K comparable, V any](current_map map[K]V) map[K]V {
+	// Create deep copy
+	map_copy := make(map[K]V)
+	// Manually copy elements from the original map to the new map
+	for key, value := range current_map {
+		map_copy[key] = value
+	}
+	return map_copy
+}
+
+func SendMapToChannel[K comparable, V any](current_map map[K]V, channel chan<- map[K]V) {
+	map_copy := MakeDeepCopyMap[K, V](current_map)
+	// Passes updated list to see if new master should be elected
+	channel <- map_copy
 }
