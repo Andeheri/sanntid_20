@@ -186,6 +186,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 
 // is a sender thread necessary??? can't master just send directly?
 func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
+
 	defer conn.Close()
 
 	encoder := json.NewEncoder(conn)
@@ -196,6 +197,8 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 			log.Println("Channel closed")
 			return
 		}
+
+		fmt.Println(data, reflect.TypeOf(data))
 
 		ttj, err := NewTypeTaggedJSON(data)
 		if err != nil {

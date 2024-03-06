@@ -37,7 +37,7 @@ func Assign(state *CommunityState) (*map[string]mscomm.AssignedRequests, error) 
 		}
 	}
 
-	jsonBytes, err := json.Marshal(state)
+	jsonBytes, err := json.Marshal(*state)
 	if err != nil {
 		return nil, fmt.Errorf("assigner could not marshal json: %v", err)
 	}

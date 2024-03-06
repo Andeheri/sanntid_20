@@ -144,14 +144,14 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 						continue
 					}
 					ch <- syncRequests
-					ch <- communityState.HallRequests.ToLights()
+					ch <- mscomm.Lights(communityState.HallRequests)
 				}
 
 				//Do not need to assign here, right?
 
 			case mscomm.SyncOK:
 				syncId := message.Payload.(mscomm.SyncOK).Id
-				if syncId != currentSyncId {
+				if syncId != currentSyncId || currentSyncId == -1{
 					continue //ignore
 				}
 				delete(syncPending, message.Addr)
@@ -163,7 +163,7 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 						if _, isApplicant := applicantSlaves[addr]; isApplicant {
 							continue
 						}
-						ch <- communityState.HallRequests.ToLights()
+						ch <- mscomm.Lights(communityState.HallRequests)
 					}
 					beginAssignment()
 				}

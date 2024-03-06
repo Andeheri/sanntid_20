@@ -3,11 +3,11 @@ package slave
 import (
 	"fmt"
 	"net"
-	"time"
 	"project/mscomm"
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"project/slave/mastercom"
+	"time"
 )
 
 func Start(initialMasterAddress string, masterAddress <-chan string) {
@@ -25,22 +25,22 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 
 	doorTimer := time.NewTimer(-1)
 
-	buttonPress := make(chan elevio.ButtonEvent)
-	clearRequest := make(chan elevio.ButtonEvent)
-	assignedRequests := make(chan mscomm.AssignedRequests)
-	requestedState := make(chan struct{})
-	sender := make(chan interface{})
-	hallLights := make(chan mscomm.Lights)
-	state := make(chan mscomm.ElevatorState)
+	buttonPress := make(chan elevio.ButtonEvent, 2)
+	clearRequest := make(chan elevio.ButtonEvent, 2)
+	assignedRequests := make(chan mscomm.AssignedRequests, 2)
+	requestedState := make(chan struct{}, 2)
+	sender := make(chan interface{}, 2)
+	hallLights := make(chan mscomm.Lights, 2)
+	state := make(chan mscomm.ElevatorState, 2)
 
 	masterChans := mastercom.MasterChannels{
-		ButtonPress:    buttonPress,
-		ClearRequest:   clearRequest,
+		ButtonPress:      buttonPress,
+		ClearRequest:     clearRequest,
 		AssignedRequests: assignedRequests,
-		RequestedState: requestedState,
-		Sender:         sender,
-		HallLights:   hallLights,
-		State: state,
+		RequestedState:   requestedState,
+		Sender:           sender,
+		HallLights:       hallLights,
+		State:            state,
 	}
 
 	fsm.Init(doorTimer, masterChans.ClearRequest)
@@ -53,8 +53,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 
 	go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
 
-
-	watchDogTime := 3*time.Second
+	watchDogTime := 3 * time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Watchdog timeout on slave")
@@ -65,12 +64,12 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 		select {
 		case a := <-drvButtons:
 			fmt.Printf("%+v\n", a)
-			if a.Button == elevio.BT_Cab{
+			if a.Button == elevio.BT_Cab {
 				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, masterChans.ClearRequest)
 			} else {
 				masterChans.ButtonPress <- a
 			}
-			
+
 		case a := <-drvFloors:
 			fmt.Printf("%+v\n", a)
 			fsm.OnFloorArrival(a, doorTimer, masterChans.ClearRequest)
@@ -109,8 +108,8 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 			fsm.Elev.HallLights = a
 			fsm.SetAllLights(&fsm.Elev)
 
-		case <- time.After(watchDogTime/10):
-		}	
+		case <-time.After(watchDogTime / 10):
+		}
 		watchDog.Reset(watchDogTime)
 	}
 }
