@@ -3,18 +3,28 @@ package master
 import (
 	"fmt"
 	"math/rand"
-	"project/commontypes"
 	"project/master/assigner"
-	"project/master/slavecomm"
+	"project/mscomm"
 	"reflect"
 	"time"
 )
 
-func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecomm.ConnectionEvent) {
+func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.ConnectionEvent) {
 
 	const floorCount int = 4
 	communityState := assigner.CommunityState{}
-	communityState.HallRequests = make(commontypes.HallRequests, floorCount)
+	communityState.HallRequests = make(mscomm.HallRequests, floorCount)
+	communityState.States = make(map[string]mscomm.ElevatorState)
+
+	//init watchdog
+	const (
+		watchdogTimeout     time.Duration = 1 * time.Second
+		watchdogResetPeriod time.Duration = 300 * time.Millisecond
+	)
+	vaktbikkje := time.AfterFunc(watchdogTimeout, func() {
+		panic("Vaktbikkje sier voff! - master deadlock?")
+	})
+	defer vaktbikkje.Stop()
 
 	slaveChans := make(map[string]chan interface{})
 	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
@@ -28,7 +38,7 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 	const applicationTimeout = 1 * time.Second //Is a timeout actually needed?
 
 	currentSyncId := -1 //-1 means not syncing
-	syncButton := commontypes.ButtonPressed{}
+	syncButton := mscomm.ButtonPressed{}
 	syncPending := make(map[string]struct{})
 	syncTimeoutCh := make(chan int)
 
@@ -36,14 +46,16 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 		select {
 		case slave := <-slaveConnEventCh:
 			if slave.Connected {
+				fmt.Println("slave connected:", slave.Addr)
 				slaveChans[slave.Addr] = slave.Ch
 
 				//reset timer if already exists??
 				applicantSlaves[slave.Addr] = time.AfterFunc(applicationTimeout, func() {
 					applicationTimeoutCh <- slave.Addr
 				})
-				slave.Ch <- commontypes.RequestHallRequests{}
+				slave.Ch <- mscomm.RequestHallRequests{}
 			} else {
+				fmt.Println("slave disconnected:", slave.Addr)
 				delete(slaveChans, slave.Addr)
 				delete(communityState.States, slave.Addr)
 			}
@@ -62,13 +74,15 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 
 			switch message.Payload.(type) {
 
-			case commontypes.HallRequests:
-				slaveHallRequests := message.Payload.(commontypes.HallRequests)
+			case mscomm.HallRequests:
+				slaveHallRequests := message.Payload.(mscomm.HallRequests)
 				communityState.HallRequests.Merge(&slaveHallRequests)
 				delete(applicantSlaves, message.Addr) // is this necessary? timeout should handle this
+				//TODO: Should also make sure that the slave receives the hall requests from the master
+				//This will be handled by starting assignment process when the slave is hired???
 
-			case commontypes.ButtonPressed:
-				buttonPressed := message.Payload.(commontypes.ButtonPressed)
+			case mscomm.ButtonPressed:
+				buttonPressed := message.Payload.(mscomm.ButtonPressed)
 				if buttonPressed.Button >= 2 {
 					continue // ignore cab requests
 				}
@@ -76,7 +90,7 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 				currentSyncId = rand.Int()
 				syncButton = buttonPressed
 
-				syncRequests := commontypes.SyncRequests{
+				syncRequests := mscomm.SyncRequests{
 					Requests: communityState.HallRequests,
 					Id:       currentSyncId,
 				}
@@ -88,28 +102,29 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 				}
 
 				//TEST. REMOVE AFTER TESTING
-				assignedOrder := make(commontypes.AssignedRequests, floorCount)
+				assignedOrder := make(mscomm.AssignedRequests, floorCount)
 				assignedOrder[buttonPressed.Floor][buttonPressed.Button] = true
 				slaveChans[message.Addr] <- assignedOrder
 
 				//TODO: create timeout
 
-			case commontypes.ElevatorState:
-				communityState.States[message.Addr] = message.Payload.(commontypes.ElevatorState)
+			case mscomm.ElevatorState:
+				communityState.States[message.Addr] = message.Payload.(mscomm.ElevatorState)
 
-			case commontypes.OrderComplete:
-				orderComplete := message.Payload.(commontypes.OrderComplete)
+			case mscomm.OrderComplete:
+				orderComplete := message.Payload.(mscomm.OrderComplete)
 				communityState.HallRequests[orderComplete.Floor][orderComplete.Button] = false
-				syncRequests := commontypes.SyncRequests{
+				syncRequests := mscomm.SyncRequests{
 					Requests: communityState.HallRequests,
 					Id:       -1, //Unsafe sync
 				}
 				for _, ch := range slaveChans {
 					ch <- syncRequests
+					//Also update lights???
 				}
 
-			case commontypes.SyncOK:
-				syncId := message.Payload.(commontypes.SyncOK).Id
+			case mscomm.SyncOK:
+				syncId := message.Payload.(mscomm.SyncOK).Id
 				if syncId != currentSyncId {
 					continue //ignore
 				}
@@ -125,6 +140,10 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 				fmt.Println("master received unknown message type from", message.Addr)
 
 			}
+		case <-time.After(watchdogResetPeriod):
+			//unblock select to reset watchdog
 		}
+
+		vaktbikkje.Reset(watchdogTimeout)
 	}
 }

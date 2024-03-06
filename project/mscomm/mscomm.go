@@ -1,9 +1,13 @@
-package commontypes
+// Master-Slave communication
+package mscomm
 
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"net"
 	"reflect"
+	"time"
 )
 
 type ElevatorState struct {
@@ -68,6 +72,18 @@ type TypeTaggedJSON struct {
 	JSON   []byte
 }
 
+func NewTypeTaggedJSON(object interface{}) (*TypeTaggedJSON, error) {
+	jsonBytes, err := json.Marshal(object)
+	if err != nil {
+		return nil, err
+	}
+	tcpPackage := TypeTaggedJSON{
+		TypeId: reflect.TypeOf(object).Name(),
+		JSON:   jsonBytes,
+	}
+	return &tcpPackage, nil
+}
+
 func (ttj *TypeTaggedJSON) ToObject(allowedTypes ...reflect.Type) (interface{}, error) {
 
 	var dataType reflect.Type
@@ -92,4 +108,82 @@ func (ttj *TypeTaggedJSON) ToObject(allowedTypes ...reflect.Type) (interface{}, 
 	object := reflect.Indirect(v).Interface()
 
 	return object, nil
+}
+
+type Package struct {
+	Addr    string
+	Payload interface{}
+}
+
+type ConnectionEvent struct {
+	Connected bool
+	Addr      string
+	Ch        chan interface{}
+}
+
+func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- ConnectionEvent, allowedTypes ...reflect.Type) {
+	defer conn.Close()
+	addr := conn.RemoteAddr().String()
+
+	decoder := json.NewDecoder(conn)
+	for {
+		ttj := TypeTaggedJSON{}
+		if err := decoder.Decode(&ttj); err != nil {
+			//Probably disconnected
+			if disconnectEventCh != nil {
+				connEvent := ConnectionEvent{
+					Connected: false,
+					Addr:      addr,
+				}
+				select {
+				case disconnectEventCh <- connEvent:
+				case <-time.After(1 * time.Second):
+					log.Println("Noone reading from connEventCh")
+				}
+
+			}
+			return
+		}
+
+		object, err := ttj.ToObject(allowedTypes...)
+
+		if err != nil {
+			fmt.Println("ttj.ToObject error: ", err)
+			continue
+		}
+
+		ch <- Package{
+			Addr:    addr,
+			Payload: object,
+		}
+
+	}
+
+}
+
+// is a sender thread necessary??? can't master just send directly?
+func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
+	defer conn.Close()
+
+	encoder := json.NewEncoder(conn)
+
+	for {
+		data, isOpen := <-ch
+		if !isOpen {
+			log.Println("Channel closed")
+			return
+		}
+
+		ttj, err := NewTypeTaggedJSON(data)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		if err := encoder.Encode(ttj); err != nil {
+			log.Println(err)
+			return
+		}
+	}
+
 }
