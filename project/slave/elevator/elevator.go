@@ -1,10 +1,10 @@
 package elevator
 
 import (
-	// "single/elevio"
 	"fmt"
-	"slave/elevio"
-	"slave/iodevice"
+	"project/mscomm"
+	"project/slave/elevio"
+	"project/slave/iodevice"
 	"time"
 )
 
@@ -30,8 +30,9 @@ type Elevator struct {
     Floor int
     Dirn elevio.MotorDirection
 	Obstructed bool
-	Door_timer time.Timer
+	DoorTimer time.Timer
     Requests[iodevice.N_FLOORS][iodevice.N_BUTTONS] int
+	HallLights mscomm.Lights
     Behaviour ElevatorBehaviour
 	Config Config 
 }
@@ -40,7 +41,7 @@ type Config struct{
 	DoorOpenDuration_s time.Duration           
 } 
 
-func (es Elevator)Print(){
+func (es *Elevator)Print(){
 	fmt.Println("  +--------------------+")
 	fmt.Printf(
 		"  |floor = %-2d          |\n"+
@@ -73,17 +74,18 @@ func (es Elevator)Print(){
 }
 
 
-func Elevator_uninitialized() Elevator{
+func Initialize() Elevator{
     return Elevator{
         Floor: -1,
         Dirn: elevio.MD_Stop,
 		Obstructed: false,
-		Door_timer: *time.NewTimer(-1),
+		DoorTimer: *time.NewTimer(-1),
         Behaviour: EB_Idle,
         Config: Config {
-            ClearRequestVariant: CV_All,
+            ClearRequestVariant: CV_InDirn,
             DoorOpenDuration_s: 3*time.Second,
         },
+		HallLights: mscomm.Lights{{false, false}, {false, false}, {false, false}, {false, false}},
     }
 }
 
