@@ -9,56 +9,56 @@ import (
 	"time"
 )
 
+var communityState assigner.CommunityState
+var slaveChans map[string]chan interface{}
+
+var applicantSlaves map[string]*time.Timer
+
+const applicationTimeout = 1 * time.Second //Is a timeout actually needed?
+var applicationTimeoutCh chan string
+
+var statePending map[string]struct{}
+
 func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.ConnectionEvent) {
 
 	const floorCount int = 4
-	communityState := assigner.CommunityState{}
+
 	communityState.HallRequests = make(mscomm.HallRequests, floorCount)
 	communityState.States = make(map[string]mscomm.ElevatorState)
+
+	slaveChans = make(map[string]chan interface{})
 
 	//init watchdog
 	const (
 		watchdogTimeout     time.Duration = 1 * time.Second
 		watchdogResetPeriod time.Duration = 300 * time.Millisecond
 	)
-	vaktbikkje := time.AfterFunc(watchdogTimeout, func() {
+	watchdog := time.AfterFunc(watchdogTimeout, func() {
 		panic("Vaktbikkje sier voff! - master deadlock?")
 	})
-	defer vaktbikkje.Stop()
+	defer watchdog.Stop()
 
-	slaveChans := make(map[string]chan interface{})
 	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
 	//TODO: deal with that
 
 	//Should we have a separate map for hiredSlaves so that we do not attempt to sync and so on with slaves that are still in the application process?
 	//Maybe make a map containing structs that have a channel and a bool for hired or not?
 
-	applicantSlaves := make(map[string]*time.Timer)
-	applicationTimeoutCh := make(chan string)
-	const applicationTimeout = 1 * time.Second //Is a timeout actually needed?
+	applicantSlaves = make(map[string]*time.Timer)
+	applicationTimeoutCh = make(chan string)
 
 	currentSyncId := -1 //-1 means not syncing
 	syncButton := mscomm.ButtonPressed{}
 	syncPending := make(map[string]struct{})
 	syncTimeoutCh := make(chan int)
+	const syncTimeout = 500 * time.Millisecond
+
+	statePending = make(map[string]struct{})
 
 	for {
 		select {
 		case slave := <-slaveConnEventCh:
-			if slave.Connected {
-				fmt.Println("slave connected:", slave.Addr)
-				slaveChans[slave.Addr] = slave.Ch
-
-				//reset timer if already exists??
-				applicantSlaves[slave.Addr] = time.AfterFunc(applicationTimeout, func() {
-					applicationTimeoutCh <- slave.Addr
-				})
-				slave.Ch <- mscomm.RequestHallRequests{}
-			} else {
-				fmt.Println("slave disconnected:", slave.Addr)
-				delete(slaveChans, slave.Addr)
-				delete(communityState.States, slave.Addr)
-			}
+			onConnectionEvent(&slave)
 		case addr := <-applicationTimeoutCh:
 			delete(applicantSlaves, addr)
 			//Force disconnect???
@@ -75,11 +75,14 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 			switch message.Payload.(type) {
 
 			case mscomm.HallRequests:
+				//Slave is hired!
 				slaveHallRequests := message.Payload.(mscomm.HallRequests)
 				communityState.HallRequests.Merge(&slaveHallRequests)
 				delete(applicantSlaves, message.Addr) // is this necessary? timeout should handle this
 				//TODO: Should also make sure that the slave receives the hall requests from the master
 				//This will be handled by starting assignment process when the slave is hired???
+
+				beginAssignment()
 
 			case mscomm.ButtonPressed:
 				buttonPressed := message.Payload.(mscomm.ButtonPressed)
@@ -97,19 +100,33 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 				syncRequests.Requests[buttonPressed.Floor][buttonPressed.Button] = true
 
 				for addr, ch := range slaveChans {
+					if _, isApplicant := applicantSlaves[addr]; isApplicant {
+						continue //skip applicants
+					}
 					syncPending[addr] = struct{}{}
 					ch <- syncRequests
 				}
 
 				//TEST. REMOVE AFTER TESTING
-				assignedOrder := make(mscomm.AssignedRequests, floorCount)
-				assignedOrder[buttonPressed.Floor][buttonPressed.Button] = true
-				slaveChans[message.Addr] <- assignedOrder
+				// assignedOrder := make(mscomm.AssignedRequests, floorCount)
+				// assignedOrder[buttonPressed.Floor][buttonPressed.Button] = true
+				// slaveChans[message.Addr] <- assignedOrder
 
-				//TODO: create timeout
+				go func() {
+					time.Sleep(syncTimeout)
+					syncTimeoutCh <- currentSyncId
+				}()
 
 			case mscomm.ElevatorState:
 				communityState.States[message.Addr] = message.Payload.(mscomm.ElevatorState)
+				delete(statePending, message.Addr)
+				if len(statePending) == 0 {
+					//all states received. ready to assign
+					assignedRequests := assigner.Assign(&communityState)
+					for addr, requests := range *assignedRequests {
+						slaveChans[addr] <- requests
+					}
+				}
 
 			case mscomm.OrderComplete:
 				orderComplete := message.Payload.(mscomm.OrderComplete)
@@ -118,10 +135,15 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 					Requests: communityState.HallRequests,
 					Id:       -1, //Unsafe sync
 				}
-				for _, ch := range slaveChans {
+				for addr, ch := range slaveChans {
+					if _, isApplicant := applicantSlaves[addr]; isApplicant {
+						continue
+					}
 					ch <- syncRequests
-					//Also update lights???
+					ch <- communityState.HallRequests.ToLights()
 				}
+
+				//Do not need to assign here, right?
 
 			case mscomm.SyncOK:
 				syncId := message.Payload.(mscomm.SyncOK).Id
@@ -133,7 +155,13 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 					//sync successful
 					currentSyncId = -1
 					communityState.HallRequests[syncButton.Floor][syncButton.Button] = true
-					//Assign!!
+					for addr, ch := range slaveChans {
+						if _, isApplicant := applicantSlaves[addr]; isApplicant {
+							continue
+						}
+						ch <- communityState.HallRequests.ToLights()
+					}
+					beginAssignment()
 				}
 
 			default:
@@ -144,6 +172,35 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 			//unblock select to reset watchdog
 		}
 
-		vaktbikkje.Reset(watchdogTimeout)
+		watchdog.Reset(watchdogTimeout)
+	}
+}
+
+func onConnectionEvent(slave *mscomm.ConnectionEvent) {
+	if slave.Connected {
+		fmt.Println("slave connected:", slave.Addr)
+		slaveChans[slave.Addr] = slave.Ch
+
+		//reset timer if already exists??
+		applicantSlaves[slave.Addr] = time.AfterFunc(applicationTimeout, func() {
+			applicationTimeoutCh <- slave.Addr
+		})
+		slave.Ch <- mscomm.RequestHallRequests{}
+	} else {
+		fmt.Println("slave disconnected:", slave.Addr)
+		close(slaveChans[slave.Addr])
+		delete(slaveChans, slave.Addr)
+		delete(communityState.States, slave.Addr)
+		beginAssignment()
+	}
+}
+
+func beginAssignment() {
+	for addr, ch := range slaveChans {
+		if _, isApplicant := applicantSlaves[addr]; isApplicant {
+			continue
+		}
+		ch <- mscomm.RequestState{}
+		statePending[addr] = struct{}{}
 	}
 }
