@@ -14,9 +14,15 @@ const (
 	Keep_alive string = "keep_alive"
 )
 
-type MSE_type struct {
+type FromMSE struct {
 	Role  Role
 	IP string
+	IPAddressMap map[string]int
+}
+
+type ToMSE struct {
+	LocalIP string
+	IPAddressMap map[string]int
 }
 
 const (

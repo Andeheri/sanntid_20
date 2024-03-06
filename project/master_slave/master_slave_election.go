@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-func IPToNum(ip_address string) int {
-	ip_as_string := strings.Join(strings.Split(ip_address, "."), "")
+func IPToNum(ipAddress string) int {
+	ip_as_string := strings.Join(strings.Split(ipAddress, "."), "")
 	ip_as_num, err := strconv.Atoi(ip_as_string)
 	if err != nil {
 		Printf("Error when casting IP address to num.\n")
@@ -17,54 +17,61 @@ func IPToNum(ip_address string) int {
 	return ip_as_num
 }
 
-func Election(localIP string, mseCh chan<- MSE_type, updatedIPAddressCh <-chan map[string]struct{}) {
-	var highest_ip_int int = 0
-	var highest_ip_string string = "0.0.0.0"
-	last_highest_ip := ""
-	last_role := Unknown
+func Election(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) {
+	var highestIPInt int = 0
+	var highestIPString string = "0.0.0.0"
+	lastHighestIP := ""
+	lastRole := Unknown
 
-	for ip_address_map := range updatedIPAddressCh {
-		fmt.Printf("Master-slave election: %v\n", ip_address_map)
+	for mseData := range updatedIPAddressCh {
+		localIP := mseData.LocalIP
+		IPAddressMap := mseData.IPAddressMap
+		fmt.Printf("Master-slave election: %v\n", IPAddressMap)
 		role := Unknown
-		highest_ip_int = 0
-		if len(ip_address_map) == 0 {  // Elevator is disconnected
-			last_role = Master
-			last_highest_ip = "127.0.0.1" // Loopback address (Always smaller than a regular IP)
-			mseCh <- MSE_type{Role: Master, IP: "127.0.0.1"}
+		highestIPInt = 0
+		if len(IPAddressMap) == 0 || localIP == "" { // Elevator is disconnected
+			lastRole = Master
+			lastHighestIP = "127.0.0.1" // Loopback address (Always smaller than a regular IP)
+			mseCh <- FromMSE{Role: Master, IP: "127.0.0.1", IPAddressMap: IPAddressMap}
 			continue
 		}
 
-		for ip_address := range ip_address_map {
-			ip_address_int := IPToNum(ip_address)
-			if (ip_address_int > highest_ip_int){
-				highest_ip_string = ip_address
-				highest_ip_int = ip_address_int
+		for ipAddress := range IPAddressMap {
+			ipAddressInt := IPToNum(ipAddress)
+			if ipAddressInt > highestIPInt {
+				highestIPString = ipAddress
+				highestIPInt = ipAddressInt
 			}
 		}
 
-		if (highest_ip_string != last_highest_ip){
-			if (highest_ip_string == localIP){
+		if highestIPString != lastHighestIP {
+			if highestIPString == localIP {
 				role = Master
-			}else{
+			} else {
 				role = Slave
 			}
 			// Check if a change in roles needs to take place
-			if (last_role != role || last_highest_ip != highest_ip_string){
-				last_role = role
-				last_highest_ip = highest_ip_string
-				mseCh <- MSE_type{Role: role, IP: highest_ip_string}
+			if lastRole != role || lastHighestIP != highestIPString {
+				lastRole = role
+				lastHighestIP = highestIPString
+				mseCh <- FromMSE{Role: role, IP: highestIPString, IPAddressMap: IPAddressMap}
 			}
 		}
 	}
 }
 
-func SendMapToChannel[K comparable, V any](current_map map[K]V, channel chan<- map[K]V){
+func MakeDeepCopyMap[K comparable, V any](current_map map[K]V) map[K]V {
 	// Create deep copy
 	map_copy := make(map[K]V)
 	// Manually copy elements from the original map to the new map
 	for key, value := range current_map {
 		map_copy[key] = value
 	}
+	return map_copy
+}
+
+func SendMapToChannel[K comparable, V any](current_map map[K]V, channel chan<- map[K]V) {
+	map_copy := MakeDeepCopyMap[K, V](current_map)
 	// Passes updated list to see if new master should be elected
-	channel <- map_copy 
+	channel <- map_copy
 }
