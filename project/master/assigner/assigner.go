@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
-	"project/commontypes"
+	"project/mscomm"
 	"runtime"
 )
 
 type CommunityState struct {
-	HallRequests commontypes.HallRequests             `json:"hallRequests"`
-	States       map[string]commontypes.ElevatorState `json:"states"`
+	HallRequests mscomm.HallRequests                  `json:"hallRequests"`
+	States       map[string]mscomm.ElevatorState `json:"states"`
 }
 
 var assignerExecutable string = ""
 
 // Based on https://github.com/TTK4145/Project-resources/blob/master/cost_fns/usage_examples/example.go
 // hall_request_assigner from https://github.com/TTK4145/Project-resources/releases/tag/v1.1.1
-func Assign(state *CommunityState) *map[string]commontypes.AssignedRequests {
+func Assign(state *CommunityState) *map[string]mscomm.AssignedRequests {
 
 	if assignerExecutable == "" {
 		_, filename, _, ok := runtime.Caller(0)
@@ -50,7 +50,7 @@ func Assign(state *CommunityState) *map[string]commontypes.AssignedRequests {
 		return nil
 	}
 
-	output := new(map[string]commontypes.AssignedRequests)
+	output := new(map[string]mscomm.AssignedRequests)
 	err = json.Unmarshal(ret, &output)
 	if err != nil {
 		fmt.Println("json.Unmarshal error: ", err)
