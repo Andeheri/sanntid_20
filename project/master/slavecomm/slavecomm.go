@@ -6,6 +6,7 @@ import (
 	"net"
 	"project/commontypes"
 	"reflect"
+	"time"
 )
 
 type SlaveMessage struct {
@@ -41,7 +42,7 @@ func Listener(port int, fromSlaveCh chan SlaveMessage, connectionEventCh chan Co
 			fmt.Println("Error:", err)
 			continue
 		}
-
+		//TODO: handle separation of merged json packages
 		go handleSlave(slaveConn, fromSlaveCh, connectionEventCh)
 	}
 
@@ -57,8 +58,21 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage, connec
 	quitCh := make(chan struct{})
 	toSlaveCh := make(chan interface{})
 
+	connectionEventCh <- ConnectionEvent{
+		Connected: true,
+		Addr:      slaveAddr,
+		Ch:        toSlaveCh,
+	}
+
 	defer func() {
 		slaveConn.Close()
+
+		//Will block if master thread is closed
+		//TODO: deal with that
+		connectionEventCh <- ConnectionEvent{
+			Connected: false,
+			Addr:      slaveAddr,
+		}
 	}()
 
 	go tcpReader(slaveConn, tcpReadCh, quitCh)
@@ -98,6 +112,7 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage, connec
 			err := json.Unmarshal(msg, &ttj)
 			if err != nil {
 				fmt.Println("received invalid TCP Package ", err)
+				fmt.Println("Package string:", string(msg))
 				continue
 			}
 
@@ -114,9 +129,16 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage, connec
 				continue
 			}
 
-			fromSlaveCh <- SlaveMessage{
+			sm := SlaveMessage{
 				Addr:    slaveAddr,
 				Payload: object,
+			}
+
+			//TODO: fix this: the timer fixes the deadlock, but it looses the message
+			select {
+			case fromSlaveCh <- sm:
+			case <-time.After(1 * time.Second):
+				fmt.Println("Send to master channel timeout")
 			}
 
 		}

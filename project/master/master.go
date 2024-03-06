@@ -1,19 +1,20 @@
 package master
 
 import (
+	"fmt"
 	"math/rand"
 	"project/commontypes"
 	"project/master/assigner"
 	"project/master/slavecomm"
+	"reflect"
 	"time"
 )
 
-var MASTER_PORT = 42752
-
 func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecomm.ConnectionEvent) {
 
+	const floorCount int = 4
 	communityState := assigner.CommunityState{}
-	communityState.HallRequests = make([][2]bool, 4)
+	communityState.HallRequests = make(commontypes.HallRequests, floorCount)
 
 	slaveChans := make(map[string]chan interface{})
 	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
@@ -56,6 +57,8 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 				syncPending = make(map[string]struct{})
 			}
 		case message := <-fromSlaveCh:
+			fmt.Println("received", reflect.TypeOf(message.Payload), "from", message.Addr)
+			fmt.Println(message.Payload)
 
 			switch message.Payload.(type) {
 
@@ -86,6 +89,11 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 					ch <- syncRequests
 				}
 
+				//TEST. REMOVE AFTER TESTING
+				assignedOrder := make(commontypes.AssignedRequests, floorCount)
+				assignedOrder[buttonPressed.Floor][buttonPressed.Button] = true
+				slaveChans[message.Addr] <- assignedOrder
+
 				//TODO: create timeout
 
 			case commontypes.ElevatorState:
@@ -114,6 +122,9 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 					communityState.HallRequests[syncButton.Floor][syncButton.Button] = true
 					//Assign!!
 				}
+
+			default:
+				fmt.Println("master received unknown message type from", message.Addr)
 
 			}
 		}
