@@ -2,7 +2,6 @@ package slavecomm
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"project/commontypes"
@@ -17,97 +16,11 @@ type SlaveMessage struct {
 
 type ConnectionEvent struct {
 	Connected bool
-	Addr string
-	Ch chan interface{}
+	Addr      string
+	Ch        chan interface{}
 }
 
-type sendRequest struct {
-	msg     SlaveMessage
-	errorCh chan error
-}
-
-type getSlavesRequest struct {
-	returnCh chan []string
-}
-
-type addSlaveRequest struct {
-	addr string
-	ch   chan interface{}
-}
-type removeSlaveRequest struct {
-	addr string
-}
-
-var managerCh chan interface{}
-
-func Send(addr string, data interface{}, timeoutms int) error {
-
-	request := sendRequest{
-		msg: SlaveMessage{
-			Addr:    addr,
-			Payload: data,
-		},
-		errorCh: make(chan error),
-	}
-
-	managerCh <- request
-	select {
-	case err := <-request.errorCh:
-		if err != nil {
-			return err
-		}
-		return nil
-
-	case <-time.After(time.Duration(timeoutms) * time.Millisecond):
-		return errors.New("slavecomm.Send() Timeout")
-	}
-
-}
-
-func Slaves(timeoutms int) ([]string, error) {
-
-	request := getSlavesRequest{
-		returnCh: make(chan []string),
-	}
-
-	managerCh <- request
-
-	select {
-	case slaves := <-request.returnCh:
-		return slaves, nil
-	case <-time.After(time.Duration(timeoutms) * time.Millisecond):
-		return nil, errors.New("slavecomm.Slaves() Timeout")
-	}
-}
-
-func Manager() {
-	addrToCh := make(map[string]chan interface{})
-	managerCh = make(chan interface{})
-
-	for request := range managerCh {
-		switch req := request.(type) {
-		case sendRequest:
-			addrToCh[req.msg.Addr] <- req.msg.Payload
-			fmt.Println("Sent to", req.msg.Addr)
-			req.errorCh <- nil
-			fmt.Println("Returned nil error")
-		case getSlavesRequest:
-			slaves := make([]string, 0, len(addrToCh))
-			for addr := range addrToCh {
-				slaves = append(slaves, addr)
-			}
-			req.returnCh <- slaves
-		case removeSlaveRequest:
-			delete(addrToCh, req.addr)
-		case addSlaveRequest:
-			addrToCh[req.addr] = req.ch
-		default:
-			fmt.Println("ERROR: Unknown manager request")
-		}
-	}
-}
-
-func Listener(port int, fromSlaveCh chan SlaveMessage) {
+func Listener(port int, fromSlaveCh chan SlaveMessage, connectionEventCh chan ConnectionEvent) {
 
 	localAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -129,13 +42,13 @@ func Listener(port int, fromSlaveCh chan SlaveMessage) {
 			fmt.Println("Error:", err)
 			continue
 		}
-
-		go handleSlave(slaveConn, fromSlaveCh)
+		//TODO: handle separation of merged json packages
+		go handleSlave(slaveConn, fromSlaveCh, connectionEventCh)
 	}
 
 }
 
-func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
+func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage, connectionEventCh chan<- ConnectionEvent) {
 
 	fmt.Println("Connected to", slaveConn.RemoteAddr().String())
 
@@ -145,13 +58,21 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 	quitCh := make(chan struct{})
 	toSlaveCh := make(chan interface{})
 
-	managerCh <- addSlaveRequest{addr: slaveAddr, ch: toSlaveCh}
-
-	//TODO: request slave's hall requests
+	connectionEventCh <- ConnectionEvent{
+		Connected: true,
+		Addr:      slaveAddr,
+		Ch:        toSlaveCh,
+	}
 
 	defer func() {
 		slaveConn.Close()
-		managerCh <- removeSlaveRequest{addr: slaveAddr}
+
+		//Will block if master thread is closed
+		//TODO: deal with that
+		connectionEventCh <- ConnectionEvent{
+			Connected: false,
+			Addr:      slaveAddr,
+		}
 	}()
 
 	go tcpReader(slaveConn, tcpReadCh, quitCh)
@@ -191,6 +112,7 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 			err := json.Unmarshal(msg, &ttj)
 			if err != nil {
 				fmt.Println("received invalid TCP Package ", err)
+				fmt.Println("Package string:", string(msg))
 				continue
 			}
 
@@ -207,9 +129,16 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage) {
 				continue
 			}
 
-			fromSlaveCh <- SlaveMessage{
+			sm := SlaveMessage{
 				Addr:    slaveAddr,
 				Payload: object,
+			}
+
+			//TODO: fix this: the timer fixes the deadlock, but it looses the message
+			select {
+			case fromSlaveCh <- sm:
+			case <-time.After(1 * time.Second):
+				fmt.Println("Send to master channel timeout")
 			}
 
 		}

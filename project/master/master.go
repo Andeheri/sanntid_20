@@ -1,20 +1,27 @@
 package master
 
 import (
+	"fmt"
 	"math/rand"
 	"project/commontypes"
 	"project/master/assigner"
 	"project/master/slavecomm"
+	"reflect"
 	"time"
 )
 
-var MASTER_PORT = 42752
-
 func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecomm.ConnectionEvent) {
 
+	const floorCount int = 4
 	communityState := assigner.CommunityState{}
+	communityState.HallRequests = make(commontypes.HallRequests, floorCount)
 
 	slaveChans := make(map[string]chan interface{})
+	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
+	//TODO: deal with that
+
+	//Should we have a separate map for hiredSlaves so that we do not attempt to sync and so on with slaves that are still in the application process?
+	//Maybe make a map containing structs that have a channel and a bool for hired or not?
 
 	applicantSlaves := make(map[string]*time.Timer)
 	applicationTimeoutCh := make(chan string)
@@ -50,6 +57,8 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 				syncPending = make(map[string]struct{})
 			}
 		case message := <-fromSlaveCh:
+			fmt.Println("received", reflect.TypeOf(message.Payload), "from", message.Addr)
+			fmt.Println(message.Payload)
 
 			switch message.Payload.(type) {
 
@@ -77,6 +86,11 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 					syncPending[addr] = struct{}{}
 					ch <- syncRequests
 				}
+
+				//TEST. REMOVE AFTER TESTING
+				assignedOrder := make(commontypes.AssignedRequests, floorCount)
+				assignedOrder[buttonPressed.Floor][buttonPressed.Button] = true
+				slaveChans[message.Addr] <- assignedOrder
 
 				//TODO: create timeout
 
@@ -106,6 +120,9 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 					communityState.HallRequests[syncButton.Floor][syncButton.Button] = true
 					//Assign!!
 				}
+
+			default:
+				fmt.Println("master received unknown message type from", message.Addr)
 
 			}
 		}
