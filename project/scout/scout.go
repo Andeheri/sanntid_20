@@ -122,7 +122,6 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 	timer := time.NewTicker(deltaT)  // Timer to check for keep-alive messages
 	hasChanged := false
 	defer timer.Stop()
-	
 	for {
 		select {
 		case IPAddr := <- UDPRecieveChannel:
@@ -187,10 +186,10 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 		fmt.Printf("Master-slave election: %v\n", IPAddressMap)
 		role := Unknown
 		highestIPInt = 0
-		if len(IPAddressMap) == 0 || localIP == "" { // Elevator is disconnected
+		if len(IPAddressMap) <= 1 || localIP == LoopbackIp { // Elevator is disconnected
 			lastRole = Master
-			lastHighestIP = "127.0.0.1" // Loopback address (Always smaller than a regular IP)
-			mseCh <- FromMSE{Role: Master, IP: "127.0.0.1", IPAddressMap: IPAddressMap}
+			lastHighestIP = LoopbackIp // (Always smaller than a regular IP)
+			mseCh <- FromMSE{Role: Master, IP: LoopbackIp, IPAddressMap: IPAddressMap}
 			continue
 		}
 
