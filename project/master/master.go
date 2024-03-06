@@ -10,11 +10,21 @@ import (
 	"time"
 )
 
-func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecomm.ConnectionEvent) {
+func Run(fromSlaveCh chan slavecomm.Package, slaveConnEventCh chan slavecomm.ConnectionEvent) {
 
 	const floorCount int = 4
 	communityState := assigner.CommunityState{}
 	communityState.HallRequests = make(commontypes.HallRequests, floorCount)
+	communityState.States = make(map[string]commontypes.ElevatorState)
+
+	const (
+		watchdogTimeout     time.Duration = 1 * time.Second
+		watchdogResetPeriod time.Duration = 300 * time.Millisecond
+	)
+	vaktbikkje := time.AfterFunc(watchdogTimeout, func() {
+		panic("Vaktbikkje sier voff! - master deadlock?")
+	})
+	defer vaktbikkje.Stop()
 
 	slaveChans := make(map[string]chan interface{})
 	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
@@ -127,6 +137,10 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 				fmt.Println("master received unknown message type from", message.Addr)
 
 			}
+		case <-time.After(watchdogResetPeriod):
+			//unblock select to reset watchdog
 		}
+
+		vaktbikkje.Reset(watchdogTimeout)
 	}
 }

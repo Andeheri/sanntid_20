@@ -68,6 +68,18 @@ type TypeTaggedJSON struct {
 	JSON   []byte
 }
 
+func NewTypeTaggedJSON(object interface{}) (*TypeTaggedJSON, error) {
+	jsonBytes, err := json.Marshal(object)
+	if err != nil {
+		return nil, err
+	}
+	tcpPackage := TypeTaggedJSON{
+		TypeId: reflect.TypeOf(object).Name(),
+		JSON:   jsonBytes,
+	}
+	return &tcpPackage, nil
+}
+
 func (ttj *TypeTaggedJSON) ToObject(allowedTypes ...reflect.Type) (interface{}, error) {
 
 	var dataType reflect.Type

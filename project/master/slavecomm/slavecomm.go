@@ -3,13 +3,14 @@ package slavecomm
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"project/commontypes"
 	"reflect"
 	"time"
 )
 
-type SlaveMessage struct {
+type Package struct {
 	Addr    string
 	Payload interface{}
 }
@@ -20,7 +21,7 @@ type ConnectionEvent struct {
 	Ch        chan interface{}
 }
 
-func Listener(port int, fromSlaveCh chan SlaveMessage, connectionEventCh chan ConnectionEvent) {
+func Listener(port int, fromSlaveCh chan Package, connectionEventCh chan ConnectionEvent) {
 
 	localAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -42,121 +43,90 @@ func Listener(port int, fromSlaveCh chan SlaveMessage, connectionEventCh chan Co
 			fmt.Println("Error:", err)
 			continue
 		}
-		//TODO: handle separation of merged json packages
-		go handleSlave(slaveConn, fromSlaveCh, connectionEventCh)
-	}
 
-}
+		slaveAddr := slaveConn.RemoteAddr().String()
 
-func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage, connectionEventCh chan<- ConnectionEvent) {
+		toSlaveCh := make(chan interface{})
+		go tcpSender(slaveConn, toSlaveCh)
+		go tcpReader(slaveConn, fromSlaveCh, connectionEventCh)
 
-	fmt.Println("Connected to", slaveConn.RemoteAddr().String())
-
-	slaveAddr := slaveConn.RemoteAddr().String()
-
-	tcpReadCh := make(chan []byte)
-	quitCh := make(chan struct{})
-	toSlaveCh := make(chan interface{})
-
-	connectionEventCh <- ConnectionEvent{
-		Connected: true,
-		Addr:      slaveAddr,
-		Ch:        toSlaveCh,
-	}
-
-	defer func() {
-		slaveConn.Close()
-
-		//Will block if master thread is closed
-		//TODO: deal with that
 		connectionEventCh <- ConnectionEvent{
-			Connected: false,
+			Connected: true,
 			Addr:      slaveAddr,
-		}
-	}()
-
-	go tcpReader(slaveConn, tcpReadCh, quitCh)
-
-	for {
-		select {
-		case <-quitCh:
-			fmt.Println("Closing connection to", slaveConn.RemoteAddr().String())
-			return
-		case data := <-toSlaveCh:
-			fmt.Println("ready to send data to slave")
-			jsonBytesPayload, err := json.Marshal(data)
-			if err != nil {
-				fmt.Println("json.Marshal error: ", err)
-				continue
-			}
-			tcpPackage := commontypes.TypeTaggedJSON{
-				TypeId: reflect.TypeOf(data).Name(),
-				JSON:   jsonBytesPayload,
-			}
-
-			jsonBytesPackage, err := json.Marshal(tcpPackage)
-			if err != nil {
-				fmt.Println("json.Marshal error: ", err)
-				continue
-			}
-
-			_, err = slaveConn.Write(jsonBytesPackage)
-			if err != nil {
-				fmt.Println("net.Write Error:", err)
-				quitCh <- struct{}{}
-				return
-			}
-		case msg := <-tcpReadCh:
-			var ttj commontypes.TypeTaggedJSON
-
-			err := json.Unmarshal(msg, &ttj)
-			if err != nil {
-				fmt.Println("received invalid TCP Package ", err)
-				fmt.Println("Package string:", string(msg))
-				continue
-			}
-
-			object, err := ttj.ToObject(
-				reflect.TypeOf(commontypes.ElevatorState{}),
-				reflect.TypeOf(commontypes.ButtonPressed{}),
-				reflect.TypeOf(commontypes.OrderComplete{}),
-				reflect.TypeOf(commontypes.SyncOK{}),
-				reflect.TypeOf(commontypes.HallRequests{}),
-			)
-
-			if err != nil {
-				fmt.Println("ttj.ToValuePtr error: ", err)
-				continue
-			}
-
-			sm := SlaveMessage{
-				Addr:    slaveAddr,
-				Payload: object,
-			}
-
-			//TODO: fix this: the timer fixes the deadlock, but it looses the message
-			select {
-			case fromSlaveCh <- sm:
-			case <-time.After(1 * time.Second):
-				fmt.Println("Send to master channel timeout")
-			}
-
+			Ch:        toSlaveCh,
 		}
 	}
+
 }
 
-func tcpReader(slaveConn *net.TCPConn, ch chan<- []byte, quitCh chan<- struct{}) {
-	buffer := make([]byte, 1024)
-	
+func tcpReader(conn *net.TCPConn, ch chan<- Package, connEventCh chan<- ConnectionEvent) {
+	defer conn.Close()
+	addr := conn.RemoteAddr().String()
+
+	decoder := json.NewDecoder(conn)
 	for {
-		// Read data from the client
-		n, err := slaveConn.Read(buffer)
-		if err != nil {
-			fmt.Println("net.Read Error:", err)
-			quitCh <- struct{}{}
+		ttj := commontypes.TypeTaggedJSON{}
+		if err := decoder.Decode(&ttj); err != nil {
+			//Probably disconnected
+			if connEventCh != nil {
+				connEvent := ConnectionEvent{
+					Connected: false,
+					Addr:      addr,
+				}
+				select {
+				case connEventCh <- connEvent:
+				case <-time.After(1 * time.Second):
+					log.Println("Noone reading from connEventCh")
+				}
+
+			}
 			return
 		}
-		ch <- buffer[:n]
+
+		object, err := ttj.ToObject(
+			reflect.TypeOf(commontypes.ElevatorState{}),
+			reflect.TypeOf(commontypes.ButtonPressed{}),
+			reflect.TypeOf(commontypes.OrderComplete{}),
+			reflect.TypeOf(commontypes.SyncOK{}),
+			reflect.TypeOf(commontypes.HallRequests{}),
+		)
+
+		if err != nil {
+			fmt.Println("ttj.ToObject error: ", err)
+			continue
+		}
+
+		ch <- Package{
+			Addr:    addr,
+			Payload: object,
+		}
+
+	}
+
+}
+
+func tcpSender(conn *net.TCPConn, ch <-chan interface{}) {
+	defer conn.Close()
+
+	encoder := json.NewEncoder(conn)
+
+	for {
+		data, isOpen := <-ch
+		if !isOpen {
+			log.Println("Channel closed")
+			return
+		}
+
+		ttj, err := commontypes.NewTypeTaggedJSON(data)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		if err := encoder.Encode(ttj); err != nil {
+			log.Println(err)
+			return
+		}
 	}
 
 }
