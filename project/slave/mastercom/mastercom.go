@@ -1,10 +1,9 @@
 package mastercom
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
-	"project/commontypes"
+	"project/mscomm"
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"reflect"
@@ -15,50 +14,101 @@ type MasterChannels struct {
 	ButtonPress  chan elevio.ButtonEvent
 	ClearRequest chan elevio.ButtonEvent
 
-	AssignedRequests chan commontypes.AssignedRequests
-	HallLights     chan commontypes.Lights
-	RequestedState chan struct{}
+	AssignedRequests chan mscomm.AssignedRequests
+	HallLights       chan mscomm.Lights
+	RequestedState   chan struct{}
 
 	Sender chan interface{}
 }
 
-var hallRequests commontypes.HallRequests = commontypes.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
+var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
 func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan struct{}) {
 
 	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
 	if err != nil {
-		fmt.Println("Error connecting to master:", err)
+		fmt.Println("Error connecting to new master:", err)
 		time.Sleep(10 * time.Millisecond)
 		masterConn, err = net.DialTCP("tcp", nil, masterAddress)
 		if err != nil {
-			return
+			elevio.SetMotorDirection(elevio.MD_Stop)
+			panic("Error connecting to new master")
 		}
 	}
+	defer func(){
+		masterConn.Close()
+	}()
 
-	defer masterConn.Close()
+	allowedTypes := [...]reflect.Type{
+		reflect.TypeOf(mscomm.RequestState{}),
+		reflect.TypeOf(mscomm.RequestHallRequests{}),
+		reflect.TypeOf(mscomm.SyncRequests{}),
+		reflect.TypeOf(mscomm.Lights{}),
+		reflect.TypeOf(mscomm.AssignedRequests{}),
+	}
 
-	go Receiver(masterConn, chans, stopch)
-	go Sender(masterConn, chans.Sender, stopch)
+	fromMasterCh := make(chan mscomm.Package)
+
+	go mscomm.TCPSender(masterConn, chans.Sender)
+	go mscomm.TCPReader(masterConn, fromMasterCh, nil, allowedTypes[:]...)
 
 	for {
 		select {
 		case a := <-chans.ButtonPress:
 			fmt.Println(a, "sender button press melding")
-			pressed := commontypes.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
-			chans.Sender <- pressed
+			pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
+			select{
+			case chans.Sender <- pressed:
+			case <-time.After(10*time.Millisecond):
+			}
+
 		case a := <-chans.ClearRequest:
 			fmt.Println(a, "sender clear request melding")
-			completedOrder := commontypes.OrderComplete{Floor: a.Floor, Button: int(a.Button)}
-			chans.Sender <- completedOrder
+			completedOrder := mscomm.OrderComplete{Floor: a.Floor, Button: int(a.Button)}
+			select{
+			case chans.Sender <- completedOrder:
+			case <-time.After(10*time.Millisecond):
+			}
+
+		case a := <-fromMasterCh:
+			switch reflect.TypeOf(a.Payload) {
+			case reflect.TypeOf(mscomm.RequestState{}):
+				fmt.Println("State requested by master")
+				chans.RequestedState <- struct{}{}
+			case reflect.TypeOf(mscomm.RequestHallRequests{}):
+				fmt.Println("Master requested Hallrequests")
+				select{
+				case chans.Sender <- hallRequests:
+				case <-time.After(10*time.Millisecond):
+				}
+			case reflect.TypeOf(mscomm.SyncRequests{}):
+				fmt.Println("Received Syncrequests")
+				hallRequests = a.Payload.(mscomm.SyncRequests).Requests
+				select{
+				case chans.Sender <- mscomm.SyncOK{Id: a.Payload.(mscomm.SyncRequests).Id}:
+				case <-time.After(10*time.Millisecond):
+				}
+			case reflect.TypeOf(mscomm.Lights{}):
+				fmt.Println("Received halllights")
+				chans.HallLights <- a.Payload.(mscomm.Lights)
+				//should also set hallrequests as lights are higher rank
+				hallRequests = mscomm.HallRequests(a.Payload.(mscomm.Lights))
+			case reflect.TypeOf(mscomm.AssignedRequests{}):
+				fmt.Println("Received assigned requests")
+				chans.AssignedRequests <- a.Payload.(mscomm.AssignedRequests)
+			default:
+				fmt.Println("received invalid type on fromMasterCh", a)
+				continue
+			}
 		case <-stopch:
+			close(chans.Sender)
 			return
 		}
 	}
 }
 
 func SendState(sender chan<- interface{}) {
-	state := commontypes.ElevatorState{
+	state := mscomm.ElevatorState{
 		Behavior:    string(fsm.Elev.Behaviour),
 		Floor:       fsm.Elev.Floor,
 		Direction:   elevio.Elevio_dirn_toString(fsm.Elev.Dirn),
@@ -66,99 +116,8 @@ func SendState(sender chan<- interface{}) {
 	}
 
 	fmt.Println("Sender state", state)
-
-	sender <- state
-}
-
-func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan struct{}) {
-
-	buffer := make([]byte, 1024)
-
-	for {
-		select {
-		case <-stopch:
-			return
-		default:
-			// Read data from the master
-			n, err := masterConn.Read(buffer)
-			if err != nil {
-				fmt.Println("Error:", err)
-				return
-			}
-
-			var ttj commontypes.TypeTaggedJSON
-
-			err = json.Unmarshal(buffer[:n], &ttj)
-			if err != nil {
-				fmt.Println("received invalid TCP Package ", err)
-				continue
-			}
-
-			object, err := ttj.ToObject(
-				reflect.TypeOf(commontypes.RequestState{}),
-				reflect.TypeOf(commontypes.RequestHallRequests{}),
-				reflect.TypeOf(commontypes.HallRequests{}),
-				reflect.TypeOf(commontypes.SyncRequests{}),
-				reflect.TypeOf(commontypes.Lights{}),
-				reflect.TypeOf(commontypes.AssignedRequests{}),
-			)
-
-			if err != nil {
-				fmt.Println("ttj.ToValuePtr error: ", err)
-				continue
-			}
-
-			switch reflect.TypeOf(object) {
-			case reflect.TypeOf(commontypes.RequestState{}):
-				fmt.Println("State requested by master")
-				chans.RequestedState <- struct{}{}
-			case reflect.TypeOf(commontypes.RequestHallRequests{}):
-				fmt.Println("Master requested Hallrequests")
-				chans.Sender <- hallRequests
-			case reflect.TypeOf(commontypes.SyncRequests{}):
-				fmt.Println("Received Syncrequests")
-				hallRequests = object.(commontypes.SyncRequests).Requests
-				chans.Sender <- commontypes.SyncOK{Id: object.(commontypes.SyncRequests).Id}
-			case reflect.TypeOf(commontypes.Lights{}):
-				fmt.Println("Received halllights")
-				chans.HallLights <- object.(commontypes.Lights)
-			case reflect.TypeOf(commontypes.AssignedRequests{}):
-				fmt.Println("Received assigned requests")
-				chans.AssignedRequests <- object.(commontypes.AssignedRequests)
-			default:
-				fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
-				continue
-			}
-		}
-	}
-}
-
-func Sender(masterConn *net.TCPConn, ch <-chan interface{}, stopch <-chan struct{}) {
-	for {
-		select {
-		case data := <-ch:
-			jsonBytesPayload, err := json.Marshal(data)
-			if err != nil {
-				fmt.Println("json.Marshal error: ", err)
-				continue
-			}
-			tcpPackage := commontypes.TypeTaggedJSON{
-				TypeId: reflect.TypeOf(data).Name(),
-				JSON:   jsonBytesPayload,
-			}
-
-			jsonBytesPackage, err := json.Marshal(tcpPackage)
-			if err != nil {
-				fmt.Println("json.Marshal error: ", err)
-				continue
-			}
-			_, err = masterConn.Write(jsonBytesPackage)
-			if err != nil {
-				fmt.Println("net.Write Error:", err)
-				return
-			}
-		case <-stopch:
-			return
-		}
+	select{
+	case sender <- state:
+	case <-time.After(10*time.Millisecond):
 	}
 }

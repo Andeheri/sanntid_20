@@ -2,7 +2,7 @@ package fsm
 
 import (
 	"fmt"
-	"project/commontypes"
+	"project/mscomm"
 	"project/slave/elevator"
 	"project/slave/elevio"
 	"project/slave/iodevice"
@@ -72,6 +72,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
                 if err != nil{
                     err = cabfile.Set(btn_floor)
                     if err != nil{
+                        elevio.SetMotorDirection(elevio.MD_Stop)
                         panic("Cab data could not be set to file, elevator moving")
                     }
                 }
@@ -195,7 +196,7 @@ func RequestsClearAll(){
 }
 
 // call fsm button press for the restructured list of orders from master.?
-func RequestsSetAll(masterRequests commontypes.AssignedRequests, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent) {
+func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent) {
     //fsm on butonpress for loop
     for btn := 0; btn < 2; btn++{
         for floor := 0; floor < iodevice.N_FLOORS; floor++{

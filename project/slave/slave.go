@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 	"time"
-	"project/commontypes"
+	"project/mscomm"
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"project/slave/mastercom"
@@ -27,10 +27,10 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 
 	buttonPress := make(chan elevio.ButtonEvent)
 	clearRequest := make(chan elevio.ButtonEvent)
-	assignedRequests := make(chan commontypes.AssignedRequests)
+	assignedRequests := make(chan mscomm.AssignedRequests)
 	requestedState := make(chan struct{})
 	sender := make(chan interface{})
-	hallLights := make(chan commontypes.Lights)
+	hallLights := make(chan mscomm.Lights)
 
 	masterChans := mastercom.MasterChannels{
 		ButtonPress:    buttonPress,
@@ -54,6 +54,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 
 	watchDogTime := 3*time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
+		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Watchdog timeout on slave")
 	})
 	defer watchDog.Stop()
@@ -87,6 +88,8 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 			if err != nil {
 				fmt.Println("Error resolving TCP address from master:", err)
 			}
+			sender = make(chan interface{})
+			masterChans.Sender = sender
 			go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
 
 		//moved these from mastercom.go as they are involved with current state
@@ -100,7 +103,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 			mastercom.SendState(sender)
 
 		case a := <-masterChans.HallLights:
-			fmt.Println(a, "mottat all lights melding")
+			fmt.Println(a, "mottat hall lights melding")
 			fsm.Elev.HallLights = a
 			fsm.SetAllLights(&fsm.Elev)
 
