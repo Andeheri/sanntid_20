@@ -73,26 +73,26 @@ func writeToFiles(data []int) error {
 func Set(floor int) error {
 	data := Read()
 	if data == nil {
-		return fmt.Errorf("unable to read data from files")
+		return fmt.Errorf("unable to read cabdata from files")
 	}
 	data[floor] = 1
 	if err := writeToFiles(data); err != nil {
 		return err
 	}
-	fmt.Println("Data written successfully to files.")
+	fmt.Println("Cabdata written successfully to files.")
 	return nil
 }
 
 func Clear(floor int) error {
 	data := Read()
 	if data == nil {
-		return fmt.Errorf("unable to read data from files")
+		return fmt.Errorf("unable to read cabdata from files")
 	}
 	data[floor] = 0
 	if err := writeToFiles(data); err != nil {
 		return err
 	}
-	fmt.Println("Data written successfully to files.")
+	fmt.Println("Cabdata written successfully to files.")
 	return nil
 }
 

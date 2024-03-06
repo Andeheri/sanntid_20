@@ -15,7 +15,7 @@ type MasterChannels struct {
 	ButtonPress  chan elevio.ButtonEvent
 	ClearRequest chan elevio.ButtonEvent
 
-	MasterRequests chan commontypes.AssignedRequests
+	AssignedRequests chan commontypes.AssignedRequests
 	HallLights     chan commontypes.Lights
 	RequestedState chan struct{}
 
@@ -136,7 +136,7 @@ func Receiver(masterConn *net.TCPConn, chans *MasterChannels, stopch <-chan stru
 				chans.HallLights <- object.(commontypes.Lights)
 			case reflect.TypeOf(commontypes.AssignedRequests{}):
 				fmt.Println("Received assigned requests")
-				chans.MasterRequests <- object.(commontypes.AssignedRequests)
+				chans.AssignedRequests <- object.(commontypes.AssignedRequests)
 			default:
 				fmt.Println("received invalid TypeTaggedJSON.TypeId ", ttj.TypeId)
 				continue

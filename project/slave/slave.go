@@ -8,7 +8,6 @@ import (
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"project/slave/mastercom"
-	"project/slave/watchdog"
 )
 
 func Start(initialMasterAddress string, masterAddress <-chan string, quit chan struct{}) {
@@ -20,15 +19,15 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 	drvFloors := make(chan int)
 	drvObstr := make(chan bool)
 
-	doorTimer := time.NewTimer(-1)
-
 	go elevio.PollButtons(drvButtons)
 	go elevio.PollFloorSensor(drvFloors)
 	go elevio.PollObstructionSwitch(drvObstr)
 
+	doorTimer := time.NewTimer(-1)
+
 	buttonPress := make(chan elevio.ButtonEvent)
 	clearRequest := make(chan elevio.ButtonEvent)
-	masterRequests := make(chan commontypes.AssignedRequests)
+	assignedRequests := make(chan commontypes.AssignedRequests)
 	requestedState := make(chan struct{})
 	sender := make(chan interface{})
 	hallLights := make(chan commontypes.Lights)
@@ -36,7 +35,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 	masterChans := mastercom.MasterChannels{
 		ButtonPress:    buttonPress,
 		ClearRequest:   clearRequest,
-		MasterRequests: masterRequests,
+		AssignedRequests: assignedRequests,
 		RequestedState: requestedState,
 		Sender:         sender,
 		HallLights:   hallLights,
@@ -58,9 +57,10 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 		return
 	}
 
-	toWatchDog := make(chan struct{})
-	fromWatchDog := make(chan struct{})
-	go watchdog.Start(1*time.Second, toWatchDog, fromWatchDog)
+	watchDogTime := 2*time.Second
+	watchDog := time.AfterFunc(watchDogTime, func() {
+		panic("Watchdog timeout on slave")
+	})
 
 	for {
 		select {
@@ -94,7 +94,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 			go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster, quitSlave)
 
 		//moved these from mastercom.go as they are involved with current state
-		case a := <-masterChans.MasterRequests:
+		case a := <-masterChans.AssignedRequests:
 			fmt.Println(a, "mottat master request melding")
 			fsm.RequestsClearAll()
 			fsm.RequestsSetAll(a, doorTimer, masterChans.ClearRequest)
@@ -107,14 +107,15 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 			fmt.Println(a, "mottat all lights melding")
 			fsm.Elev.HallLights = a
 			fsm.SetAllLights(fsm.Elev)
-			
+		
+		//fjerne:
 		case a := <-quitSlave:
 			fmt.Println(a, "quit slave melding")
 			quit <- struct{}{}
 			return
 
-		case <-fromWatchDog:
-			toWatchDog <- struct{}{}
+		case <- time.After(watchDogTime/3):
+			watchDog.Reset(watchDogTime)
 		}	
 	}
 }

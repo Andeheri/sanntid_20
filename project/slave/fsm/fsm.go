@@ -54,7 +54,13 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
             doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
         } else {
             if btn_type == elevio.BT_Cab{
-                cabfile.Set(btn_floor)
+                err := cabfile.Set(btn_floor)
+                if err != nil{
+                    err = cabfile.Set(btn_floor)
+                    if err != nil{
+                        panic("Cab data could not be set to file, elevator dooropen")
+                    }
+                }
             }
             Elev.Requests[btn_floor][btn_type] = 1
         }
@@ -62,14 +68,26 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 
     case elevator.EB_Moving:
         if btn_type == elevio.BT_Cab{
-            cabfile.Set(btn_floor)
+            err := cabfile.Set(btn_floor)
+                if err != nil{
+                    err = cabfile.Set(btn_floor)
+                    if err != nil{
+                        panic("Cab data could not be set to file, elevator moving")
+                    }
+                }
         }
         Elev.Requests[btn_floor][btn_type] = 1
 
         
     case elevator.EB_Idle:    
         if btn_type == elevio.BT_Cab{
-            cabfile.Set(btn_floor)
+            err := cabfile.Set(btn_floor)
+                if err != nil{
+                    err = cabfile.Set(btn_floor)
+                    if err != nil{
+                        panic("Cab data could not be set to file, elevator idle")
+                    }
+                }
         }
         Elev.Requests[btn_floor][btn_type] = 1
         pair := requests.ChooseDirection(Elev)
