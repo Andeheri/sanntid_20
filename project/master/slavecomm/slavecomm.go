@@ -125,7 +125,7 @@ func handleSlave(slaveConn *net.TCPConn, fromSlaveCh chan<- SlaveMessage, connec
 
 func tcpReader(slaveConn *net.TCPConn, ch chan<- []byte, quitCh chan<- struct{}) {
 	buffer := make([]byte, 1024)
-
+	
 	for {
 		// Read data from the client
 		n, err := slaveConn.Read(buffer)

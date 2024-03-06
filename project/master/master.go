@@ -13,13 +13,14 @@ var MASTER_PORT = 42752
 func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecomm.ConnectionEvent) {
 
 	communityState := assigner.CommunityState{}
+	communityState.HallRequests = make([][2]bool, 4)
 
 	slaveChans := make(map[string]chan interface{})
 	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
 	//TODO: deal with that
 
-    //Should we have a separate map for hiredSlaves so that we do not attempt to sync and so on with slaves that are still in the application process?
-    //Maybe make a map containing structs that have a channel and a bool for hired or not?
+	//Should we have a separate map for hiredSlaves so that we do not attempt to sync and so on with slaves that are still in the application process?
+	//Maybe make a map containing structs that have a channel and a bool for hired or not?
 
 	applicantSlaves := make(map[string]*time.Timer)
 	applicationTimeoutCh := make(chan string)
@@ -62,6 +63,8 @@ func Run(fromSlaveCh chan slavecomm.SlaveMessage, slaveConnEventCh chan slavecom
 				slaveHallRequests := message.Payload.(commontypes.HallRequests)
 				communityState.HallRequests.Merge(&slaveHallRequests)
 				delete(applicantSlaves, message.Addr) // is this necessary? timeout should handle this
+				//TODO: Should also make sure that the slave receives the hall requests from the master
+				//This will be handled by starting assignment process when the slave is hired???
 
 			case commontypes.ButtonPressed:
 				buttonPressed := message.Payload.(commontypes.ButtonPressed)
