@@ -10,7 +10,7 @@ import (
 	"project/slave/mastercom"
 )
 
-func Start(initialMasterAddress string, masterAddress <-chan string, quit chan struct{}) {
+func Start(initialMasterAddress string, masterAddress <-chan string) {
 	numFloors := 4
 
 	elevio.Init("localhost:15657", numFloors)
@@ -48,19 +48,15 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 	if err != nil {
 		fmt.Println("Error resolving TCP address from master:", err)
 	}
-	quitSlave := make(chan bool)
-	go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster, quitSlave)
-	a := <- quitSlave
-	fmt.Println(a, "failed connection to master")
-	if a {
-		quit <- struct{}{}
-		return
-	}
 
-	watchDogTime := 2*time.Second
+	go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
+
+
+	watchDogTime := 3*time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
 		panic("Watchdog timeout on slave")
 	})
+	defer watchDog.Stop()
 
 	for {
 		select {
@@ -91,7 +87,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 			if err != nil {
 				fmt.Println("Error resolving TCP address from master:", err)
 			}
-			go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster, quitSlave)
+			go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
 
 		//moved these from mastercom.go as they are involved with current state
 		case a := <-masterChans.AssignedRequests:
@@ -107,15 +103,9 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 			fmt.Println(a, "mottat all lights melding")
 			fsm.Elev.HallLights = a
 			fsm.SetAllLights(fsm.Elev)
-		
-		//fjerne:
-		case a := <-quitSlave:
-			fmt.Println(a, "quit slave melding")
-			quit <- struct{}{}
-			return
 
-		case <- time.After(watchDogTime/3):
-			watchDog.Reset(watchDogTime)
+		case <- time.After(watchDogTime/10):
 		}	
+		watchDog.Reset(watchDogTime)
 	}
 }

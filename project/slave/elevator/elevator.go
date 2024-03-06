@@ -41,7 +41,7 @@ type Config struct{
 	DoorOpenDuration_s time.Duration           
 } 
 
-func (es Elevator)Print(){
+func (es *Elevator)Print(){
 	fmt.Println("  +--------------------+")
 	fmt.Printf(
 		"  |floor = %-2d          |\n"+

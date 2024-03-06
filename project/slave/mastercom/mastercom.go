@@ -24,7 +24,7 @@ type MasterChannels struct {
 
 var hallRequests commontypes.HallRequests = commontypes.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
-func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan struct{}, quitSlave chan<- bool) {
+func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan struct{}) {
 
 	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
 	if err != nil {
@@ -32,23 +32,19 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 		time.Sleep(10 * time.Millisecond)
 		masterConn, err = net.DialTCP("tcp", nil, masterAddress)
 		if err != nil {
-			quitSlave <- true
-			fmt.Println("quitSlave melding sendt")
 			return
 		}
 	}
-	quitSlave <- false
 
 	defer masterConn.Close()
 
-	// Set a deadline for the connection
-	deadline := time.Now().Add(1200 * time.Second)
-	err = masterConn.SetDeadline(deadline)
-	if err != nil {
-		fmt.Println("Error setting deadline:", err)
-		return
-	}
-	// masterConn.SetNoDelay(false)
+	// // Set a deadline for the connection
+	// deadline := time.Now().Add(1200 * time.Second)
+	// err = masterConn.SetDeadline(deadline)
+	// if err != nil {
+	// 	fmt.Println("Error setting deadline:", err)
+	// 	return
+	// }
 
 	go Receiver(masterConn, chans, stopch)
 	go Sender(masterConn, chans.Sender, stopch)
