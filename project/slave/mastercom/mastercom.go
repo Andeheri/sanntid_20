@@ -38,14 +38,6 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 
 	defer masterConn.Close()
 
-	// // Set a deadline for the connection
-	// deadline := time.Now().Add(1200 * time.Second)
-	// err = masterConn.SetDeadline(deadline)
-	// if err != nil {
-	// 	fmt.Println("Error setting deadline:", err)
-	// 	return
-	// }
-
 	go Receiver(masterConn, chans, stopch)
 	go Sender(masterConn, chans.Sender, stopch)
 

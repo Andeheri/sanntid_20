@@ -32,7 +32,7 @@ func Init(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
     }
 }
 
-func SetAllLights(es elevator.Elevator){
+func SetAllLights(es *elevator.Elevator){
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
         for btn := elevio.ButtonType(0); btn < 2; btn++{
             outputDevice.RequestButtonLight(btn, floor, es.HallLights[floor][btn]);
@@ -106,7 +106,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 
     }
     
-    SetAllLights(Elev);
+    SetAllLights(&Elev);
     
     fmt.Println("\nNew state:")
     Elev.Print();
@@ -115,7 +115,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 
 
 
-func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan elevio.ButtonEvent){
+func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
     fmt.Printf("\n(newfloor: %d)\n",newFloor)
     Elev.Print();
 
@@ -132,7 +132,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan elevi
             Elev = requests.ClearAtCurrentFloor(Elev, clearRequest);
             doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
             fmt.Println(Elev.Config.DoorOpenDuration_s)
-            SetAllLights(Elev);
+            SetAllLights(&Elev);
             Elev.Behaviour = elevator.EB_DoorOpen;
         }
     default:
@@ -145,7 +145,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan elevi
 
 
 
-func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan elevio.ButtonEvent){
+func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
     fmt.Println("\n(doorTimeout)")
     
     Elev.Print();
@@ -164,7 +164,7 @@ func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan elevio.ButtonEvent){
         case elevator.EB_DoorOpen:
             doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
             Elev = requests.ClearAtCurrentFloor(Elev, clearRequest);
-            SetAllLights(Elev);
+            SetAllLights(&Elev);
 
         case elevator.EB_Moving:
             outputDevice.DoorLight(false);
@@ -195,7 +195,7 @@ func RequestsClearAll(){
 }
 
 // call fsm button press for the restructured list of orders from master.?
-func RequestsSetAll(masterRequests commontypes.AssignedRequests, doorTimer *time.Timer, clearRequest chan elevio.ButtonEvent) {
+func RequestsSetAll(masterRequests commontypes.AssignedRequests, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent) {
     //fsm on butonpress for loop
     for btn := 0; btn < 2; btn++{
         for floor := 0; floor < iodevice.N_FLOORS; floor++{

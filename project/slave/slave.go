@@ -102,7 +102,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 		case a := <-masterChans.HallLights:
 			fmt.Println(a, "mottat all lights melding")
 			fsm.Elev.HallLights = a
-			fsm.SetAllLights(fsm.Elev)
+			fsm.SetAllLights(&fsm.Elev)
 
 		case <- time.After(watchDogTime/10):
 		}	
