@@ -3,11 +3,12 @@ package slave
 import (
 	"fmt"
 	"net"
+	"time"
 	"project/commontypes"
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"project/slave/mastercom"
-	"time"
+	"project/slave/watchdog"
 )
 
 func Start(initialMasterAddress string, masterAddress <-chan string, quit chan struct{}) {
@@ -56,6 +57,10 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 		quit <- struct{}{}
 		return
 	}
+
+	toWatchDog := make(chan struct{})
+	fromWatchDog := make(chan struct{})
+	go watchdog.Start(1*time.Second, toWatchDog, fromWatchDog)
 
 	for {
 		select {
@@ -107,6 +112,9 @@ func Start(initialMasterAddress string, masterAddress <-chan string, quit chan s
 			fmt.Println(a, "quit slave melding")
 			quit <- struct{}{}
 			return
-		}
+
+		case <-fromWatchDog:
+			toWatchDog <- struct{}{}
+		}	
 	}
 }

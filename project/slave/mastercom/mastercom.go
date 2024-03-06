@@ -48,7 +48,7 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 		fmt.Println("Error setting deadline:", err)
 		return
 	}
-	masterConn.SetNoDelay(false)
+	// masterConn.SetNoDelay(false)
 
 	go Receiver(masterConn, chans, stopch)
 	go Sender(masterConn, chans.Sender, stopch)
