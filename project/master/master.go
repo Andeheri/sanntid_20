@@ -122,7 +122,11 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 				delete(statePending, message.Addr)
 				if len(statePending) == 0 {
 					//all states received. ready to assign
-					assignedRequests := assigner.Assign(&communityState)
+					assignedRequests, err := assigner.Assign(&communityState)
+					if err != nil {
+						fmt.Println("assigner error:", err)
+						continue
+					}
 					for addr, requests := range *assignedRequests {
 						slaveChans[addr] <- requests
 					}
