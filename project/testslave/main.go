@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"project/slave"
+	"time"
 )
 
 func main() {
@@ -11,6 +12,10 @@ func main() {
 	initialMasterAddress := "localhost:11000"
 	masterAddress := make(chan string)
 	go slave.Start(initialMasterAddress, masterAddress)
+	
+	time.Sleep(20*time.Second)
+	masterAddress <- "localhost:11001"
+	select {
 
-	select {}
+	}
 }

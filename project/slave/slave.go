@@ -31,6 +31,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 	requestedState := make(chan struct{})
 	sender := make(chan interface{})
 	hallLights := make(chan mscomm.Lights)
+	state := make(chan mscomm.ElevatorState)
 
 	masterChans := mastercom.MasterChannels{
 		ButtonPress:    buttonPress,
@@ -39,6 +40,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 		RequestedState: requestedState,
 		Sender:         sender,
 		HallLights:   hallLights,
+		State: state,
 	}
 
 	fsm.Init(doorTimer, masterChans.ClearRequest)
@@ -100,7 +102,7 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 
 		case a := <-masterChans.RequestedState:
 			fmt.Println(a, "sender state til master")
-			mastercom.SendState(sender)
+			masterChans.State <- fsm.GetState()
 
 		case a := <-masterChans.HallLights:
 			fmt.Println(a, "mottat hall lights melding")

@@ -5,7 +5,6 @@ import (
 	"net"
 	"project/mscomm"
 	"project/slave/elevio"
-	"project/slave/fsm"
 	"reflect"
 	"time"
 )
@@ -17,6 +16,8 @@ type MasterChannels struct {
 	AssignedRequests chan mscomm.AssignedRequests
 	HallLights       chan mscomm.Lights
 	RequestedState   chan struct{}
+
+	State chan mscomm.ElevatorState
 
 	Sender chan interface{}
 }
@@ -31,11 +32,11 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 		time.Sleep(10 * time.Millisecond)
 		masterConn, err = net.DialTCP("tcp", nil, masterAddress)
 		if err != nil {
-			elevio.SetMotorDirection(elevio.MD_Stop)
+			// elevio.SetMotorDirection(elevio.MD_Stop)
 			panic("Error connecting to new master")
 		}
 	}
-	defer func(){
+	defer func() {
 		masterConn.Close()
 	}()
 
@@ -57,17 +58,24 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 		case a := <-chans.ButtonPress:
 			fmt.Println(a, "sender button press melding")
 			pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
-			select{
+			select {
 			case chans.Sender <- pressed:
-			case <-time.After(10*time.Millisecond):
+			case <-time.After(10 * time.Millisecond):
 			}
 
 		case a := <-chans.ClearRequest:
 			fmt.Println(a, "sender clear request melding")
 			completedOrder := mscomm.OrderComplete{Floor: a.Floor, Button: int(a.Button)}
-			select{
+			select {
 			case chans.Sender <- completedOrder:
-			case <-time.After(10*time.Millisecond):
+			case <-time.After(10 * time.Millisecond):
+			}
+
+		case a := <-chans.State:
+			fmt.Println("Sending state message to master")
+			select {
+			case chans.Sender <- a:
+			case <-time.After(10 * time.Millisecond):
 			}
 
 		case a := <-fromMasterCh:
@@ -77,16 +85,16 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 				chans.RequestedState <- struct{}{}
 			case reflect.TypeOf(mscomm.RequestHallRequests{}):
 				fmt.Println("Master requested Hallrequests")
-				select{
+				select {
 				case chans.Sender <- hallRequests:
-				case <-time.After(10*time.Millisecond):
+				case <-time.After(10 * time.Millisecond):
 				}
 			case reflect.TypeOf(mscomm.SyncRequests{}):
 				fmt.Println("Received Syncrequests")
 				hallRequests = a.Payload.(mscomm.SyncRequests).Requests
-				select{
+				select {
 				case chans.Sender <- mscomm.SyncOK{Id: a.Payload.(mscomm.SyncRequests).Id}:
-				case <-time.After(10*time.Millisecond):
+				case <-time.After(10 * time.Millisecond):
 				}
 			case reflect.TypeOf(mscomm.Lights{}):
 				fmt.Println("Received halllights")
@@ -104,20 +112,5 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 			close(chans.Sender)
 			return
 		}
-	}
-}
-
-func SendState(sender chan<- interface{}) {
-	state := mscomm.ElevatorState{
-		Behavior:    string(fsm.Elev.Behaviour),
-		Floor:       fsm.Elev.Floor,
-		Direction:   elevio.Elevio_dirn_toString(fsm.Elev.Dirn),
-		CabRequests: fsm.GetCabRequests(),
-	}
-
-	fmt.Println("Sender state", state)
-	select{
-	case sender <- state:
-	case <-time.After(10*time.Millisecond):
 	}
 }

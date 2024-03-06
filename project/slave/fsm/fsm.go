@@ -2,12 +2,13 @@ package fsm
 
 import (
 	"fmt"
+	"log"
 	"project/mscomm"
+	"project/slave/cabfile"
 	"project/slave/elevator"
 	"project/slave/elevio"
 	"project/slave/iodevice"
 	"project/slave/requests"
-    "project/slave/cabfile"
 	"time"
 )
 
@@ -18,10 +19,18 @@ var outputDevice iodevice.ElevOutputDevice
 func Init(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
     outputDevice = iodevice.Elevio_getOutputDevice()
 
-    // Code for fixing starting position between floors
+    // Code for fixing starting position between or below floors
     outputDevice.MotorDirection(elevio.MD_Down);
     Elev.Dirn = elevio.MD_Down;
     Elev.Behaviour = elevator.EB_Moving;
+    //TODO: test this:
+    time.AfterFunc(3*time.Second, func() {
+        if Elev.Floor == -1{
+            log.Println("afterfunc below floors")
+            outputDevice.MotorDirection(elevio.MD_Up);
+            Elev.Dirn = elevio.MD_Up;
+        }
+    })
 
     cabRequests := cabfile.Read()
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
@@ -207,7 +216,7 @@ func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Time
     }  
 }
 
-func GetCabRequests()[]bool{
+func getCabRequests()[]bool{
     cabRequests := make([]bool,iodevice.N_FLOORS)
     var btn elevio.ButtonType = elevio.BT_Cab
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
@@ -220,6 +229,15 @@ func GetCabRequests()[]bool{
     return cabRequests
 }
 
+func GetState() mscomm.ElevatorState {
+	state := mscomm.ElevatorState{
+		Behavior:    string(Elev.Behaviour),
+		Floor:       Elev.Floor,
+		Direction:   elevio.Elevio_dirn_toString(Elev.Dirn),
+		CabRequests: getCabRequests(),
+	}
+    return state
+}
 
 
 
