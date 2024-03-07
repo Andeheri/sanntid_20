@@ -1,6 +1,7 @@
 package requests
 
 import (
+	"log"
 	"project/mscomm"
 	"project/slave/cabfile"
 	"project/slave/elevator"
@@ -37,6 +38,8 @@ func below(e elevator.Elevator) bool {
 }
 
 func here(e elevator.Elevator) bool {
+	//TODO: check
+	if e.Floor == -1 {return false}
 	for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
 		if e.Requests[e.Floor][btn] != 0 {
 			return true
@@ -154,6 +157,7 @@ func clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clearReque
 	select {
 	case clearRequest <- mscomm.OrderComplete{Floor: floor, Button: int(btnType)}:
 	case <-time.After(10 * time.Millisecond):
+		log.Println("Sending ordercomplete timed out")
 	}
 	return e
 }

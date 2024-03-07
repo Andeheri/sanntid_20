@@ -142,6 +142,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 				}
 
 			}
+			log.Println("Reader routine offline")
 			return
 		}
 
@@ -182,6 +183,7 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 
 		if err := encoder.Encode(ttj); err != nil {
 			log.Println(err)
+			log.Println("Sender routine offline")
 			return
 		}
 	}
