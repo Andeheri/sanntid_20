@@ -4,8 +4,8 @@ package mscomm
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
+	"project/rblog"
 	"reflect"
 	"time"
 )
@@ -161,7 +161,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 				select {
 				case disconnectEventCh <- connEvent:
 				case <-time.After(1 * time.Second):
-					log.Println("Noone reading from connEventCh")
+					rblog.Red.Println("Noone reading from connEventCh")
 				}
 
 			}
@@ -171,7 +171,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 		object, err := ttj.ToObject(allowedTypes...)
 
 		if err != nil {
-			fmt.Println("ttj.ToObject error: ", err)
+			rblog.Red.Println("ttj.ToObject error: ", err)
 			continue
 		}
 
@@ -194,20 +194,20 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 	for {
 		data, isOpen := <-ch
 		if !isOpen {
-			log.Println("Channel closed")
+			rblog.Println("Channel closed")
 			return
 		}
 
-		fmt.Println(data, reflect.TypeOf(data))
+		rblog.Println(data, reflect.TypeOf(data))
 
 		ttj, err := NewTypeTaggedJSON(data)
 		if err != nil {
-			log.Println(err)
+			rblog.Red.Println(err)
 			continue
 		}
 
 		if err := encoder.Encode(ttj); err != nil {
-			log.Println(err)
+			rblog.Red.Println(err)
 			return
 		}
 	}

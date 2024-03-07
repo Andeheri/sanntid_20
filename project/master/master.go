@@ -1,10 +1,10 @@
 package master
 
 import (
-	"fmt"
 	"math/rand"
 	"project/master/assigner"
 	"project/mscomm"
+	"project/rblog"
 	"reflect"
 	"time"
 )
@@ -69,8 +69,8 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 				syncPending = make(map[string]struct{})
 			}
 		case message := <-fromSlaveCh:
-			fmt.Println("received", reflect.TypeOf(message.Payload), "from", message.Addr)
-			fmt.Println(message.Payload)
+			rblog.Println("received", reflect.TypeOf(message.Payload), "from", message.Addr)
+			rblog.Println(message.Payload)
 
 			switch message.Payload.(type) {
 
@@ -124,7 +124,7 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 					//all states received. ready to assign
 					assignedRequests, err := assigner.Assign(&communityState)
 					if err != nil {
-						fmt.Println("assigner error:", err)
+						rblog.Red.Println("assigner error:", err)
 						continue
 					}
 					for addr, requests := range *assignedRequests {
@@ -151,7 +151,7 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 
 			case mscomm.SyncOK:
 				syncId := message.Payload.(mscomm.SyncOK).Id
-				if syncId != currentSyncId || currentSyncId == -1{
+				if syncId != currentSyncId || currentSyncId == -1 {
 					continue //ignore
 				}
 				delete(syncPending, message.Addr)
@@ -169,7 +169,7 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 				}
 
 			default:
-				fmt.Println("master received unknown message type from", message.Addr)
+				rblog.Println("master received unknown message type from", message.Addr)
 
 			}
 		case <-time.After(watchdogResetPeriod):
@@ -182,7 +182,7 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 
 func onConnectionEvent(slave *mscomm.ConnectionEvent) {
 	if slave.Connected {
-		fmt.Println("slave connected:", slave.Addr)
+		rblog.Green.Println("slave connected: ", slave.Addr)
 		slaveChans[slave.Addr] = slave.Ch
 
 		//reset timer if already exists??
@@ -191,7 +191,7 @@ func onConnectionEvent(slave *mscomm.ConnectionEvent) {
 		})
 		slave.Ch <- mscomm.RequestHallRequests{}
 	} else {
-		fmt.Println("slave disconnected:", slave.Addr)
+		rblog.Yellow.Println("slave disconnected: ", slave.Addr)
 		close(slaveChans[slave.Addr])
 		delete(slaveChans, slave.Addr)
 		delete(communityState.States, slave.Addr)
