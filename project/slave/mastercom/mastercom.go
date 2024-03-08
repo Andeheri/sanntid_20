@@ -2,29 +2,23 @@ package mastercom
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"project/mscomm"
 	"project/slave/elevio"
+	"project/slave/fsm"
 	"reflect"
 	"time"
 )
 
-type MasterChannels struct {
-	ButtonPress  chan elevio.ButtonEvent
-	ClearRequest chan elevio.ButtonEvent
-
-	AssignedRequests chan mscomm.AssignedRequests
-	HallLights       chan mscomm.Lights
-	RequestedState   chan struct{}
-
-	State chan mscomm.ElevatorState
-
-	Sender chan interface{}
-}
-
 var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
-func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan struct{}) {
+func StartUp(address string, sender <-chan interface{}, fromMasterCh chan<- mscomm.Package) *net.TCPConn {
+
+	masterAddress, err := net.ResolveTCPAddr("tcp", address)
+	if err != nil {
+		fmt.Println("Error resolving TCP address from master:", err)
+	}
 
 	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
 	if err != nil {
@@ -32,13 +26,10 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 		time.Sleep(10 * time.Millisecond)
 		masterConn, err = net.DialTCP("tcp", nil, masterAddress)
 		if err != nil {
-			// elevio.SetMotorDirection(elevio.MD_Stop)
+			elevio.SetMotorDirection(elevio.MD_Stop)
 			panic("Error connecting to new master")
 		}
 	}
-	defer func() {
-		masterConn.Close()
-	}()
 
 	allowedTypes := [...]reflect.Type{
 		reflect.TypeOf(mscomm.RequestState{}),
@@ -48,69 +39,53 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 		reflect.TypeOf(mscomm.AssignedRequests{}),
 	}
 
-	fromMasterCh := make(chan mscomm.Package)
-
-	go mscomm.TCPSender(masterConn, chans.Sender)
+	go mscomm.TCPSender(masterConn, sender)
 	go mscomm.TCPReader(masterConn, fromMasterCh, nil, allowedTypes[:]...)
 
-	for {
+	return masterConn
+}
+
+func HandleMessage(payload interface{}, sender chan<- interface{}, doorTimer *time.Timer) {
+
+	switch reflect.TypeOf(payload) {
+	case reflect.TypeOf(mscomm.RequestState{}):
+		fmt.Println("State requested by master")
 		select {
-		case a := <-chans.ButtonPress:
-			fmt.Println(a, "sender button press melding")
-			pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
-			select {
-			case chans.Sender <- pressed:
-			case <-time.After(10 * time.Millisecond):
-			}
-
-		case a := <-chans.ClearRequest:
-			fmt.Println(a, "sender clear request melding")
-			completedOrder := mscomm.OrderComplete{Floor: a.Floor, Button: int(a.Button)}
-			select {
-			case chans.Sender <- completedOrder:
-			case <-time.After(10 * time.Millisecond):
-			}
-
-		case a := <-chans.State:
-			fmt.Println("Sending state message to master")
-			select {
-			case chans.Sender <- a:
-			case <-time.After(10 * time.Millisecond):
-			}
-
-		case a := <-fromMasterCh:
-			switch reflect.TypeOf(a.Payload) {
-			case reflect.TypeOf(mscomm.RequestState{}):
-				fmt.Println("State requested by master")
-				chans.RequestedState <- struct{}{}
-			case reflect.TypeOf(mscomm.RequestHallRequests{}):
-				fmt.Println("Master requested Hallrequests")
-				select {
-				case chans.Sender <- hallRequests:
-				case <-time.After(10 * time.Millisecond):
-				}
-			case reflect.TypeOf(mscomm.SyncRequests{}):
-				fmt.Println("Received Syncrequests")
-				hallRequests = a.Payload.(mscomm.SyncRequests).Requests
-				select {
-				case chans.Sender <- mscomm.SyncOK{Id: a.Payload.(mscomm.SyncRequests).Id}:
-				case <-time.After(10 * time.Millisecond):
-				}
-			case reflect.TypeOf(mscomm.Lights{}):
-				fmt.Println("Received halllights")
-				chans.HallLights <- a.Payload.(mscomm.Lights)
-				//should also set hallrequests as lights are higher rank
-				hallRequests = mscomm.HallRequests(a.Payload.(mscomm.Lights))
-			case reflect.TypeOf(mscomm.AssignedRequests{}):
-				fmt.Println("Received assigned requests")
-				chans.AssignedRequests <- a.Payload.(mscomm.AssignedRequests)
-			default:
-				fmt.Println("received invalid type on fromMasterCh", a)
-				continue
-			}
-		case <-stopch:
-			close(chans.Sender)
-			return
+		case sender <- fsm.GetState():
+		case <-time.After(10 * time.Millisecond):
+			log.Println("Sending state timed out")
 		}
+
+	case reflect.TypeOf(mscomm.RequestHallRequests{}):
+		fmt.Println("Master requested Hallrequests")
+		select {
+		case sender <- hallRequests:
+		case <-time.After(10 * time.Millisecond):
+			log.Println("Sending hallrequests timed out")
+		}
+
+	case reflect.TypeOf(mscomm.SyncRequests{}):
+		fmt.Println("Received Syncrequests")
+		hallRequests = payload.(mscomm.SyncRequests).Requests
+		select {
+		case sender <- mscomm.SyncOK{Id: payload.(mscomm.SyncRequests).Id}:
+		case <-time.After(10 * time.Millisecond):
+			log.Println("Sending SyncOK timed out")
+		}
+
+	case reflect.TypeOf(mscomm.Lights{}):
+		fmt.Println("Received halllights", payload.(mscomm.Lights))
+		fsm.Elev.HallLights = payload.(mscomm.Lights)
+		fsm.SetAllLights(&fsm.Elev)
+		//should also set hallrequests as lights are higher rank
+		hallRequests = mscomm.HallRequests(payload.(mscomm.Lights))
+
+	case reflect.TypeOf(mscomm.AssignedRequests{}):
+		fmt.Println("Received assigned requests")
+		fsm.RequestsClearAll()
+		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, sender)
+
+	default:
+		fmt.Println("received invalid type on fromMasterCh", payload)
 	}
 }

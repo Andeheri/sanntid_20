@@ -2,7 +2,6 @@ package fsm
 
 import (
 	"fmt"
-	"log"
 	"project/mscomm"
 	"project/slave/cabfile"
 	"project/slave/elevator"
@@ -16,26 +15,23 @@ var Elev elevator.Elevator = elevator.Initialize()
 var outputDevice iodevice.ElevOutputDevice
 
 
-func Init(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
+func Init(doorTimer *time.Timer, clearRequest chan<- interface{}){
     outputDevice = iodevice.Elevio_getOutputDevice()
 
-    // Code for fixing starting position between or below floors
-    outputDevice.MotorDirection(elevio.MD_Down);
-    Elev.Dirn = elevio.MD_Down;
-    Elev.Behaviour = elevator.EB_Moving;
-    //TODO: test this:
-    time.AfterFunc(3*time.Second, func() {
-        if Elev.Floor == -1{
-            log.Println("afterfunc below floors")
-            outputDevice.MotorDirection(elevio.MD_Up);
-            Elev.Dirn = elevio.MD_Up;
-        }
-    })
+    outputDevice.MotorDirection(elevio.MD_Stop);
+    Elev.Dirn = elevio.MD_Stop;
+    Elev.Behaviour = elevator.EB_Idle;
 
+    // Code for fixing starting position between floors
+    if elevio.GetFloor() == -1 {
+        outputDevice.MotorDirection(elevio.MD_Down);
+        Elev.Dirn = elevio.MD_Down;
+        Elev.Behaviour = elevator.EB_Moving;
+    }
+    
     cabRequests := cabfile.Read()
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
         if cabRequests[floor] != 0{
-            // Elev.Requests[floor][elevio.BT_Cab] = 1
             OnRequestButtonPress(floor, elevio.BT_Cab, doorTimer, clearRequest)
         }
     }
@@ -53,7 +49,7 @@ func SetAllLights(es *elevator.Elevator){
 }
 
 
-func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
+func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequest chan<-interface{}){
     fmt.Printf("\n(%d, %s)\n", btn_floor, iodevice.Elevio_button_toString(btn_type))
     Elev.Print()
     
@@ -125,7 +121,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 
 
 
-func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
+func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- interface{}){
     fmt.Printf("\n(newfloor: %d)\n",newFloor)
     Elev.Print();
 
@@ -155,7 +151,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- ele
 
 
 
-func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent){
+func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan<- interface{}){
     fmt.Println("\n(doorTimeout)")
     
     Elev.Print();
@@ -205,7 +201,7 @@ func RequestsClearAll(){
 }
 
 // call fsm button press for the restructured list of orders from master.?
-func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, clearRequest chan<- elevio.ButtonEvent) {
+func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, clearRequest chan<- interface{}) {
     //fsm on butonpress for loop
     for btn := 0; btn < 2; btn++{
         for floor := 0; floor < iodevice.N_FLOORS; floor++{
