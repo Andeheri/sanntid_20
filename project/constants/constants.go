@@ -33,12 +33,3 @@ const (
 	DeltaTKeepAlive         time.Duration = 50 * time.Millisecond
 	DeltaTSamplingKeepAlive time.Duration = 100 * time.Millisecond
 )
-
-// Colored text
-const (
-	ColorReset = "\033[0m"
-	ColorYellow = "\033[33m"
-	ColorCyan  = "\033[36m"
-	ColorGreen = "\033[32m"
-	ColorRed   = "\033[31m"
-)

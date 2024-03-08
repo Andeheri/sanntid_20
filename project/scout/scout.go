@@ -183,7 +183,7 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 	for mseData := range updatedIPAddressCh {
 		localIP := mseData.LocalIP
 		IPAddressMap := mseData.IPAddressMap
-		rblog.Yellow.Printf("%sCurrent active IP's: %+v%s\n", ColorYellow, IPAddressMap, ColorReset)
+		rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
 		role := Unknown
 		highestIPInt = 0
 		if len(IPAddressMap) <= 1 { // Elevator is disconnected
