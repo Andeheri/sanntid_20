@@ -1,4 +1,4 @@
-package slavecomm
+package server
 
 import (
 	"fmt"
@@ -7,20 +7,23 @@ import (
 	"reflect"
 )
 
-func Listener(port int, fromSlaveCh chan mscomm.Package, connectionEventCh chan mscomm.ConnectionEvent) {
-
+func Listen(port int) (*net.TCPListener, error) {
 	localAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		return nil, err
 	}
 
 	listener, err := net.ListenTCP("tcp", localAddr)
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		listener.Close()
+		return nil, err
 	}
-	defer listener.Close()
+	return listener, nil
+}
+
+//Intended to run as a goroutine
+//Returns when listener is closed
+func Acceptor(listener *net.TCPListener, fromSlaveCh chan mscomm.Package, connectionEventCh chan mscomm.ConnectionEvent) {
 
 	allowedTypes := [...]reflect.Type{
 		reflect.TypeOf(mscomm.ElevatorState{}),
@@ -35,7 +38,7 @@ func Listener(port int, fromSlaveCh chan mscomm.Package, connectionEventCh chan 
 		slaveConn, err := listener.AcceptTCP()
 		if err != nil {
 			fmt.Println("Error:", err)
-			continue
+			return
 		}
 
 		slaveAddr := slaveConn.RemoteAddr().String()

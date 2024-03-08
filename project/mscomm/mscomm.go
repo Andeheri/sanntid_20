@@ -4,8 +4,8 @@ package mscomm
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
+	"project/rblog"
 	"reflect"
 	"time"
 )
@@ -28,20 +28,6 @@ type Lights [][2]bool
 type AssignedRequests [][2]bool
 type HallRequests [][2]bool
 
-type RequestsOrLights interface {
-	Lights | AssignedRequests | HallRequests
-}
-
-//	func Merge[T1 RequestsOrLights, T2 RequestsOrLights](first T1, second T2) T1 {
-//		if len(*first) != len(second) {
-//			return nil
-//		}
-//		for i := range first {
-//			result[i][0] = first[i][0] || second[i][0]
-//			result[i][1] = first[i][1] || second[i][1]
-//		}
-//		return ls
-//	}
 func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
 	if len(*hr1) != len(*hr2) {
 		return fmt.Errorf("HallRequests length mismatch")
@@ -51,15 +37,6 @@ func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
 		(*hr1)[i][1] = (*hr1)[i][1] || (*hr2)[i][1]
 	}
 	return nil
-}
-
-func (hr1 *HallRequests) ToLights() *Lights {
-	lights := make(Lights, len(*hr1))
-	for i := range *hr1 {
-		lights[i][0] = (*hr1)[i][0]
-		lights[i][1] = (*hr1)[i][1]
-	}
-	return &lights
 }
 
 type SyncRequests struct {
@@ -144,6 +121,8 @@ type ConnectionEvent struct {
 	Ch        chan interface{}
 }
 
+// Intended to run as a goroutine
+// Returns when conn is closed
 func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- ConnectionEvent, allowedTypes ...reflect.Type) {
 	defer conn.Close()
 	addr := conn.RemoteAddr().String()
@@ -161,7 +140,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 				select {
 				case disconnectEventCh <- connEvent:
 				case <-time.After(1 * time.Second):
-					log.Println("Noone reading from connEventCh")
+					rblog.Red.Println("Noone reading from connEventCh")
 				}
 
 			}
@@ -172,7 +151,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 		object, err := ttj.ToObject(allowedTypes...)
 
 		if err != nil {
-			fmt.Println("ttj.ToObject error: ", err)
+			rblog.Red.Println("ttj.ToObject error: ", err)
 			continue
 		}
 
@@ -185,7 +164,8 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 
 }
 
-// is a sender thread necessary??? can't master just send directly?
+// Intended to run as a goroutine
+// Returns when conn is closed or ch is closed
 func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 
 	defer conn.Close()
@@ -195,21 +175,20 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 	for {
 		data, isOpen := <-ch
 		if !isOpen {
-			log.Println("Channel closed")
+			rblog.Println("Channel closed")
 			return
 		}
 
-		fmt.Println(data, reflect.TypeOf(data))
+		rblog.Println(data, reflect.TypeOf(data))
 
 		ttj, err := NewTypeTaggedJSON(data)
 		if err != nil {
-			log.Println(err)
+			rblog.Red.Println(err)
 			continue
 		}
 
 		if err := encoder.Encode(ttj); err != nil {
-			log.Println(err)
-			log.Println("Sender routine offline")
+			rblog.Red.Println(err)
 			return
 		}
 	}
