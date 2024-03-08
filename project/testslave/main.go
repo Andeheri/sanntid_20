@@ -10,12 +10,14 @@ func main() {
 	fmt.Println("Hello, World!")
 	// initialMasterAddress := "10.100.23.192:12221"
 	initialMasterAddress := "localhost:11000"
-	masterAddress := make(chan string)
-	go slave.Start(masterAddress)
+	masterAddressCh := make(chan string)
+
+	go slave.Start(masterAddressCh)
+	
 	time.Sleep(10*time.Second)
-	masterAddress <- initialMasterAddress
+	masterAddressCh <- initialMasterAddress
 	time.Sleep(30*time.Second)
-	masterAddress <- "localhost:11001"
+	masterAddressCh <- "localhost:11001"
 	select {
 
 	}

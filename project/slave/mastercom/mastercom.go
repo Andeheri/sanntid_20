@@ -13,7 +13,7 @@ import (
 
 var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
-func StartUp(address string, sender <-chan interface{}, fromMasterCh chan<- mscomm.Package) *net.TCPConn {
+func StartUp(address string, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package) *net.TCPConn {
 
 	masterAddress, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
@@ -39,19 +39,19 @@ func StartUp(address string, sender <-chan interface{}, fromMasterCh chan<- msco
 		reflect.TypeOf(mscomm.AssignedRequests{}),
 	}
 
-	go mscomm.TCPSender(masterConn, sender)
+	go mscomm.TCPSender(masterConn, senderCh)
 	go mscomm.TCPReader(masterConn, fromMasterCh, nil, allowedTypes[:]...)
 
 	return masterConn
 }
 
-func HandleMessage(payload interface{}, sender chan<- interface{}, doorTimer *time.Timer) {
+func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer) {
 
 	switch reflect.TypeOf(payload) {
 	case reflect.TypeOf(mscomm.RequestState{}):
 		fmt.Println("State requested by master")
 		select {
-		case sender <- fsm.GetState():
+		case senderCh <- fsm.GetState():
 		case <-time.After(10 * time.Millisecond):
 			log.Println("Sending state timed out")
 		}
@@ -59,7 +59,7 @@ func HandleMessage(payload interface{}, sender chan<- interface{}, doorTimer *ti
 	case reflect.TypeOf(mscomm.RequestHallRequests{}):
 		fmt.Println("Master requested Hallrequests")
 		select {
-		case sender <- hallRequests:
+		case senderCh <- hallRequests:
 		case <-time.After(10 * time.Millisecond):
 			log.Println("Sending hallrequests timed out")
 		}
@@ -68,7 +68,7 @@ func HandleMessage(payload interface{}, sender chan<- interface{}, doorTimer *ti
 		fmt.Println("Received Syncrequests")
 		hallRequests = payload.(mscomm.SyncRequests).Requests
 		select {
-		case sender <- mscomm.SyncOK{Id: payload.(mscomm.SyncRequests).Id}:
+		case senderCh <- mscomm.SyncOK{Id: payload.(mscomm.SyncRequests).Id}:
 		case <-time.After(10 * time.Millisecond):
 			log.Println("Sending SyncOK timed out")
 		}
@@ -83,7 +83,7 @@ func HandleMessage(payload interface{}, sender chan<- interface{}, doorTimer *ti
 	case reflect.TypeOf(mscomm.AssignedRequests{}):
 		fmt.Println("Received assigned requests")
 		fsm.RequestsClearAll()
-		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, sender)
+		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, senderCh)
 
 	default:
 		fmt.Println("received invalid type on fromMasterCh", payload)

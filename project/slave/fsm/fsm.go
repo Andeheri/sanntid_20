@@ -15,7 +15,7 @@ var Elev elevator.Elevator = elevator.Initialize()
 var outputDevice iodevice.ElevOutputDevice
 
 
-func Init(doorTimer *time.Timer, clearRequest chan<- interface{}){
+func Init(doorTimer *time.Timer, clearRequestCh chan<- interface{}){
     outputDevice = iodevice.Elevio_getOutputDevice()
 
     outputDevice.MotorDirection(elevio.MD_Stop);
@@ -32,7 +32,7 @@ func Init(doorTimer *time.Timer, clearRequest chan<- interface{}){
     cabRequests := cabfile.Read()
     for floor := 0; floor < iodevice.N_FLOORS; floor++{
         if cabRequests[floor] != 0{
-            OnRequestButtonPress(floor, elevio.BT_Cab, doorTimer, clearRequest)
+            OnRequestButtonPress(floor, elevio.BT_Cab, doorTimer, clearRequestCh)
         }
     }
 }
@@ -49,7 +49,7 @@ func SetAllLights(es *elevator.Elevator){
 }
 
 
-func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequest chan<-interface{}){
+func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequestCh chan<-interface{}){
     fmt.Printf("\n(%d, %s)\n", btn_floor, iodevice.Elevio_button_toString(btn_type))
     Elev.Print()
     
@@ -103,7 +103,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
         case elevator.EB_DoorOpen:
             outputDevice.DoorLight(true);
             doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
-            Elev = requests.ClearAtCurrentFloor(Elev, clearRequest)
+            Elev = requests.ClearAtCurrentFloor(Elev, clearRequestCh)
         case elevator.EB_Moving:
             outputDevice.MotorDirection(Elev.Dirn)
         case elevator.EB_Idle:
@@ -121,7 +121,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 
 
 
-func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- interface{}){
+func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequestCh chan<- interface{}){
     fmt.Printf("\n(newfloor: %d)\n",newFloor)
     Elev.Print();
 
@@ -135,7 +135,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- int
             fmt.Println("Opening door")
             outputDevice.MotorDirection(elevio.MD_Stop);
             outputDevice.DoorLight(true);
-            Elev = requests.ClearAtCurrentFloor(Elev, clearRequest);
+            Elev = requests.ClearAtCurrentFloor(Elev, clearRequestCh);
             doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
             fmt.Println(Elev.Config.DoorOpenDuration_s)
             SetAllLights(&Elev);
@@ -151,7 +151,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequest chan<- int
 
 
 
-func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan<- interface{}){
+func OnDoorTimeout(doorTimer *time.Timer, clearRequestCh chan<- interface{}){
     fmt.Println("\n(doorTimeout)")
     
     Elev.Print();
@@ -169,7 +169,7 @@ func OnDoorTimeout(doorTimer *time.Timer, clearRequest chan<- interface{}){
         switch(Elev.Behaviour){
         case elevator.EB_DoorOpen:
             doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
-            Elev = requests.ClearAtCurrentFloor(Elev, clearRequest);
+            Elev = requests.ClearAtCurrentFloor(Elev, clearRequestCh);
             SetAllLights(&Elev);
 
         case elevator.EB_Moving:
@@ -201,12 +201,12 @@ func RequestsClearAll(){
 }
 
 // call fsm button press for the restructured list of orders from master.?
-func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, clearRequest chan<- interface{}) {
+func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, clearRequestCh chan<- interface{}) {
     //fsm on butonpress for loop
     for btn := 0; btn < 2; btn++{
         for floor := 0; floor < iodevice.N_FLOORS; floor++{
             if masterRequests[floor][btn] {
-                OnRequestButtonPress(floor, elevio.ButtonType(btn), doorTimer, clearRequest)
+                OnRequestButtonPress(floor, elevio.ButtonType(btn), doorTimer, clearRequestCh)
             }
         }    
     }  
