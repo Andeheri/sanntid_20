@@ -19,7 +19,7 @@ var applicationTimeoutCh chan string
 
 var statePending map[string]struct{}
 
-func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.ConnectionEvent) {
+func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.ConnectionEvent, quitCh chan struct{}) {
 
 	const floorCount int = 4
 
@@ -68,6 +68,11 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 				currentSyncId = -1
 				syncPending = make(map[string]struct{})
 			}
+		case <-quitCh:
+			for _, ch := range slaveChans {
+				close(ch)
+			}
+			//wait for all slaves to disconnect
 		case message := <-fromSlaveCh:
 			rblog.Println("received", reflect.TypeOf(message.Payload), "from", message.Addr)
 			rblog.Println(message.Payload)

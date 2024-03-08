@@ -28,20 +28,6 @@ type Lights [][2]bool
 type AssignedRequests [][2]bool
 type HallRequests [][2]bool
 
-type RequestsOrLights interface {
-	Lights | AssignedRequests | HallRequests
-}
-
-//	func Merge[T1 RequestsOrLights, T2 RequestsOrLights](first T1, second T2) T1 {
-//		if len(*first) != len(second) {
-//			return nil
-//		}
-//		for i := range first {
-//			result[i][0] = first[i][0] || second[i][0]
-//			result[i][1] = first[i][1] || second[i][1]
-//		}
-//		return ls
-//	}
 func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
 	if len(*hr1) != len(*hr2) {
 		return fmt.Errorf("HallRequests length mismatch")
@@ -51,15 +37,6 @@ func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
 		(*hr1)[i][1] = (*hr1)[i][1] || (*hr2)[i][1]
 	}
 	return nil
-}
-
-func (hr1 *HallRequests) ToLights() *Lights {
-	lights := make(Lights, len(*hr1))
-	for i := range *hr1 {
-		lights[i][0] = (*hr1)[i][0]
-		lights[i][1] = (*hr1)[i][1]
-	}
-	return &lights
 }
 
 type SyncRequests struct {
