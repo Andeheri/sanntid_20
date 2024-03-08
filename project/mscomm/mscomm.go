@@ -39,6 +39,14 @@ func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
 	return nil
 }
 
+func (hr *HallRequests) Set(btn ButtonPressed) {
+	(*hr)[btn.Floor][btn.Button] = true
+}
+
+func (hr *HallRequests) Clear(order OrderComplete) {
+	(*hr)[order.Floor][order.Button] = false
+}
+
 type SyncRequests struct {
 	Requests HallRequests
 	Id       int

@@ -11,32 +11,41 @@ import (
 	"time"
 )
 
+type slaveType struct {
+	ch           chan interface{}
+	hired        bool
+	statePending bool
+}
+
+type syncAttemptType struct {
+	button        mscomm.ButtonPressed
+	pendingSlaves map[string]struct{}
+}
+
+const (
+	applicationTimeout  time.Duration = 500 * time.Second //Is a timeout actually needed?
+	syncTimeout         time.Duration = 500 * time.Millisecond
+	watchdogTimeout     time.Duration = 1 * time.Second
+	watchdogResetPeriod time.Duration = 300 * time.Millisecond
+	floorCount          int           = 4
+)
+
 var communityState assigner.CommunityState
-var slaveChans map[string]chan interface{}
 
-var applicantSlaves map[string]*time.Timer
-
-const applicationTimeout = 1 * time.Second //Is a timeout actually needed?
 var applicationTimeoutCh chan string
 
-var statePending map[string]struct{}
+var slaves = make(map[string]*slaveType)
 
 func Run(masterPort int, quitCh chan struct{}) {
 
 	rblog.Magenta.Print("--- Starting master ---")
 
-	const floorCount int = 4
-
 	communityState.HallRequests = make(mscomm.HallRequests, floorCount)
 	communityState.States = make(map[string]mscomm.ElevatorState)
 
-	slaveChans = make(map[string]chan interface{})
+	syncAttempts := make(map[int]syncAttemptType)
 
 	//init watchdog
-	const (
-		watchdogTimeout     time.Duration = 1 * time.Second
-		watchdogResetPeriod time.Duration = 300 * time.Millisecond
-	)
 	watchdog := time.AfterFunc(watchdogTimeout, func() {
 		panic("Vaktbikkje sier voff! - master deadlock?")
 	})
@@ -48,16 +57,12 @@ func Run(masterPort int, quitCh chan struct{}) {
 	//Should we have a separate map for hiredSlaves so that we do not attempt to sync and so on with slaves that are still in the application process?
 	//Maybe make a map containing structs that have a channel and a bool for hired or not?
 
-	applicantSlaves = make(map[string]*time.Timer)
 	applicationTimeoutCh = make(chan string)
-
-	currentSyncId := -1 //-1 means not syncing
-	syncButton := mscomm.ButtonPressed{}
-	syncPending := make(map[string]struct{})
 	syncTimeoutCh := make(chan int)
-	const syncTimeout = 500 * time.Millisecond
+	terminateCh := make(chan struct{})
 
-	statePending = make(map[string]struct{})
+	fromSlaveCh := make(chan mscomm.Package)
+	slaveConnEventCh := make(chan mscomm.ConnectionEvent)
 
 	listener, err := server.Listen(masterPort)
 	if err != nil {
@@ -65,30 +70,61 @@ func Run(masterPort int, quitCh chan struct{}) {
 	}
 	defer listener.Close()
 
-	fromSlaveCh := make(chan mscomm.Package)
-	slaveConnEventCh := make(chan mscomm.ConnectionEvent)
-
 	go server.Acceptor(listener, fromSlaveCh, slaveConnEventCh)
 
 	for {
 		select {
 		case slave := <-slaveConnEventCh:
-			onConnectionEvent(&slave)
+			if slave.Connected {
+				rblog.Magenta.Println("slave connected: ", slave.Addr)
+				slaves[slave.Addr] = &slaveType{
+					ch: slave.Ch,
+				}
+
+				go func() {
+					time.Sleep(applicationTimeout)
+					applicationTimeoutCh <- slave.Addr
+				}()
+
+				slave.Ch <- mscomm.RequestHallRequests{}
+
+			} else {
+				rblog.Magenta.Println("slave disconnected: ", slave.Addr)
+				dismiss(slave.Addr)
+				beginAssignment()
+			}
 		case addr := <-applicationTimeoutCh:
-			delete(applicantSlaves, addr)
-			//Force disconnect???
+			if !slaves[addr].hired {
+				rblog.Yellow.Println("slave did not meet application deadline:", addr)
+				dismiss(addr)
+			}
 		case syncId := <-syncTimeoutCh:
-			if syncId == currentSyncId {
-				//sync failed
-				currentSyncId = -1
-				syncPending = make(map[string]struct{})
+			if _, exists := syncAttempts[syncId]; exists {
+				rblog.Yellow.Println("sync attempt timed out")
+				//dismiss pending slaves??
+				delete(syncAttempts, syncId)
 			}
 		case <-quitCh:
-			for _, ch := range slaveChans {
-				close(ch)
+			listener.Close()
+			for addr := range slaves {
+				dismiss(addr)
 			}
-			//wait for all slaves to disconnect
+			//some delay to clear channels before terminating
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				terminateCh <- struct{}{}
+			}()
+
+		case <-terminateCh:
+			rblog.Magenta.Print("--- Terminating master ---")
+			return
 		case message := <-fromSlaveCh:
+			if _, exists := slaves[message.Addr]; !exists {
+				rblog.Red.Println("master received message from unknown slave", message.Addr)
+				//worthy of panic?
+				//all messages received should come from registered slaves, or else something went wrong
+				continue
+			}
 
 			switch message.Payload.(type) {
 
@@ -96,7 +132,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				//Slave is hired!
 				slaveHallRequests := message.Payload.(mscomm.HallRequests)
 				communityState.HallRequests.Merge(&slaveHallRequests)
-				delete(applicantSlaves, message.Addr) // is this necessary? timeout should handle this
+				slaves[message.Addr].hired = true
 				//TODO: Should also make sure that the slave receives the hall requests from the master
 				//This will be handled by starting assignment process when the slave is hired???
 
@@ -108,37 +144,45 @@ func Run(masterPort int, quitCh chan struct{}) {
 					continue // ignore cab requests
 				}
 
-				currentSyncId = rand.Int()
-				syncButton = buttonPressed
+				syncId := rand.Int()
+
+				syncAttempts[syncId] = syncAttemptType{
+					button:        buttonPressed,
+					pendingSlaves: make(map[string]struct{}),
+				}
 
 				syncRequests := mscomm.SyncRequests{
 					Requests: communityState.HallRequests,
-					Id:       currentSyncId,
+					Id:       syncId,
 				}
 				syncRequests.Requests[buttonPressed.Floor][buttonPressed.Button] = true
 
-				for addr, ch := range slaveChans {
-					if _, isApplicant := applicantSlaves[addr]; isApplicant {
-						continue //skip applicants
+				for addr, slave := range slaves {
+					if slave.hired {
+						syncAttempts[syncId].pendingSlaves[addr] = struct{}{}
+						slave.ch <- syncRequests
 					}
-					syncPending[addr] = struct{}{}
-					ch <- syncRequests
-				}
 
-				//TEST. REMOVE AFTER TESTING
-				// assignedOrder := make(mscomm.AssignedRequests, floorCount)
-				// assignedOrder[buttonPressed.Floor][buttonPressed.Button] = true
-				// slaveChans[message.Addr] <- assignedOrder
+				}
 
 				go func() {
 					time.Sleep(syncTimeout)
-					syncTimeoutCh <- currentSyncId
+					syncTimeoutCh <- syncId
 				}()
 
 			case mscomm.ElevatorState:
 				communityState.States[message.Addr] = message.Payload.(mscomm.ElevatorState)
-				delete(statePending, message.Addr)
-				if len(statePending) == 0 {
+				slaves[message.Addr].statePending = false
+				anyonePending := false
+
+				for _, slave := range slaves {
+					if slave.statePending {
+						anyonePending = true
+						break
+					}
+				}
+
+				if !anyonePending {
 					//all states received. ready to assign
 					assignedRequests, err := assigner.Assign(&communityState)
 					if err != nil {
@@ -146,7 +190,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 						continue
 					}
 					for addr, requests := range *assignedRequests {
-						slaveChans[addr] <- requests
+						slaves[addr].ch <- requests
 					}
 				}
 
@@ -157,32 +201,30 @@ func Run(masterPort int, quitCh chan struct{}) {
 					Requests: communityState.HallRequests,
 					Id:       -1, //Unsafe sync
 				}
-				for addr, ch := range slaveChans {
-					if _, isApplicant := applicantSlaves[addr]; isApplicant {
-						continue
+				for _, slave := range slaves {
+					if slave.hired {
+						slave.ch <- syncRequests
+						slave.ch <- mscomm.Lights(communityState.HallRequests)
 					}
-					ch <- syncRequests
-					ch <- mscomm.Lights(communityState.HallRequests)
 				}
 
 				//Do not need to assign here, right?
 
 			case mscomm.SyncOK:
 				syncId := message.Payload.(mscomm.SyncOK).Id
-				if syncId != currentSyncId || currentSyncId == -1 {
+				if _, exists := syncAttempts[syncId]; !exists {
 					continue //ignore
 				}
-				delete(syncPending, message.Addr)
-				if len(syncPending) == 0 {
+				delete(syncAttempts[syncId].pendingSlaves, message.Addr)
+				if len(syncAttempts[syncId].pendingSlaves) == 0 {
 					//sync successful
-					currentSyncId = -1
-					communityState.HallRequests[syncButton.Floor][syncButton.Button] = true
-					for addr, ch := range slaveChans {
-						if _, isApplicant := applicantSlaves[addr]; isApplicant {
-							continue
+					communityState.HallRequests.Set(syncAttempts[syncId].button)
+					for _, slave := range slaves {
+						if slave.hired {
+							slave.ch <- mscomm.Lights(communityState.HallRequests)
 						}
-						ch <- mscomm.Lights(communityState.HallRequests)
 					}
+					delete(syncAttempts, syncId)
 					beginAssignment()
 				}
 
@@ -197,32 +239,19 @@ func Run(masterPort int, quitCh chan struct{}) {
 		watchdog.Reset(watchdogTimeout)
 	}
 }
-
-func onConnectionEvent(slave *mscomm.ConnectionEvent) {
-	if slave.Connected {
-		rblog.Magenta.Println("slave connected: ", slave.Addr)
-		slaveChans[slave.Addr] = slave.Ch
-
-		//reset timer if already exists??
-		applicantSlaves[slave.Addr] = time.AfterFunc(applicationTimeout, func() {
-			applicationTimeoutCh <- slave.Addr
-		})
-		slave.Ch <- mscomm.RequestHallRequests{}
-	} else {
-		rblog.Magenta.Println("slave disconnected: ", slave.Addr)
-		close(slaveChans[slave.Addr])
-		delete(slaveChans, slave.Addr)
-		delete(communityState.States, slave.Addr)
-		beginAssignment()
+func dismiss(addr string) {
+	if _, exists := slaves[addr]; exists {
+		close(slaves[addr].ch)
+		delete(slaves, addr)
 	}
+	delete(communityState.States, addr)
 }
 
 func beginAssignment() {
-	for addr, ch := range slaveChans {
-		if _, isApplicant := applicantSlaves[addr]; isApplicant {
-			continue
+	for _, slave := range slaves {
+		if slave.hired {
+			slave.ch <- mscomm.RequestState{}
+			slave.statePending = true
 		}
-		ch <- mscomm.RequestState{}
-		statePending[addr] = struct{}{}
 	}
 }
