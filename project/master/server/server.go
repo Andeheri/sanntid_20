@@ -1,4 +1,4 @@
-package slavecomm
+package server
 
 import (
 	"fmt"
@@ -7,19 +7,22 @@ import (
 	"reflect"
 )
 
-func Listener(port int, fromSlaveCh chan mscomm.Package, connectionEventCh chan mscomm.ConnectionEvent) {
-
+func Listen(port int) (*net.TCPListener, error) {
 	localAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		return nil, err
 	}
 
 	listener, err := net.ListenTCP("tcp", localAddr)
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		listener.Close()
+		return nil, err
 	}
+	return listener, nil
+}
+
+func Acceptor(listener *net.TCPListener, fromSlaveCh chan mscomm.Package, connectionEventCh chan mscomm.ConnectionEvent) {
+
 	defer listener.Close()
 
 	allowedTypes := [...]reflect.Type{

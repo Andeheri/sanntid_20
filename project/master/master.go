@@ -1,8 +1,10 @@
 package master
 
 import (
+	"fmt"
 	"math/rand"
 	"project/master/assigner"
+	"project/master/server"
 	"project/mscomm"
 	"project/rblog"
 	"reflect"
@@ -54,6 +56,13 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 	const syncTimeout = 500 * time.Millisecond
 
 	statePending = make(map[string]struct{})
+
+	const masterPort = 12221
+	listener, err := server.Listen(masterPort)
+	if err != nil {
+		panic(fmt.Sprint("Could not get listener", err))
+	}
+	go server.Acceptor(listener, fromSlaveCh, slaveConnEventCh)
 
 	for {
 		select {
