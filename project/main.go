@@ -2,15 +2,16 @@ package main
 
 import (
 	. "elevator/constants"
+	"elevator/rblog"
 	"elevator/scout"
 	. "fmt"
 )
 
-func startMaster(masterPort string, ipAddressMap map[string]int){
+func startMaster(masterPort string, ipAddressMap map[string]int) {
 	// Should set up TCP-connection to each ip in ipAddressMap
 }
 
-func startSlave(masterPort string, masterIP string){
+func startSlave(masterPort string, masterIP string) {
 	// Should set up
 }
 
@@ -18,14 +19,14 @@ func main() {
 	// Variables
 	elevatorRole := Unknown
 	ipAddressMap := make(map[string]int)
-	masterIP     := LoopbackIp  // Default is loopback address
+	masterIP := LoopbackIp // Default is loopback address
 
 	Printf("Starting elevator ...\n")
 
 	// Channels
 	recieveUDPChannel := make(chan string)
-	tofromMSEChannel  := make(chan ToMSE)
-	fromMSEChannel    := make(chan FromMSE)
+	tofromMSEChannel := make(chan ToMSE)
+	fromMSEChannel := make(chan FromMSE)
 
 	// Start all go-threads
 	go scout.ListenForInfo(recieveUDPChannel)
@@ -36,27 +37,27 @@ func main() {
 	localIP, err := scout.LocalIP()
 	if err != nil {
 		// Should maybe become master
-		Printf("Error when getting local IP. Probably disconnected.\n")
+		rblog.Red.Println("Error when getting local IP. Probably disconnected.")
 		tofromMSEChannel <- ToMSE{LocalIP: localIP, IPAddressMap: map[string]int{localIP: NumKeepAlive}}
 	} else {
-		Printf("Local IP: %s\n\n", localIP)
+		rblog.Green.Printf("Local IP: %s\n\n", localIP)
 	}
 
 	for {
 		select {
-			case mseData := <- fromMSEChannel:
-				// Data recieved from Master Slave Election
-				elevatorRole = mseData.ElevatorRole
-				masterIP = mseData.MasterIP
-				ipAddressMap = mseData.CurrentIPAddressMap
-				Printf("\n%sElevator role: %s\nMaster IP: %s%s\n\n", ColorCyan, elevatorRole, masterIP, ColorReset)
-				if (elevatorRole == Master){
-					// Start master protocol
-					startMaster(MasterPort, ipAddressMap)
-				}else if (elevatorRole == Slave){
-					// Start slave protocol
-					startSlave(MasterPort, masterIP)
-				}
+		case mseData := <-fromMSEChannel:
+			// Data recieved from Master Slave Election
+			elevatorRole = mseData.ElevatorRole
+			masterIP = mseData.MasterIP
+			ipAddressMap = mseData.CurrentIPAddressMap
+			rblog.Cyan.Printf("\nElevator role: %s\nMaster IP: %s\n\n", elevatorRole, masterIP)
+			if elevatorRole == Master {
+				// Start master protocol
+				startMaster(MasterPort, ipAddressMap)
+			} else if elevatorRole == Slave {
+				// Start slave protocol
+				startSlave(MasterPort, masterIP)
+			}
 		}
 	}
 }

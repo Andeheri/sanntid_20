@@ -3,6 +3,7 @@ package scout
 import (
 	"bytes"
 	. "elevator/constants"
+	"elevator/rblog"
 	"elevator/scout/conn"
 	"fmt"
 	"net"
@@ -14,7 +15,7 @@ import (
 var localIP string = LoopbackIp
 
 func LocalIP() (string, error) {
-	if (localIP == LoopbackIp) {
+	if localIP == LoopbackIp {
 		conn, err := net.DialTCP("tcp4", nil, &net.TCPAddr{IP: []byte{8, 8, 8, 8}, Port: 53})
 		if err != nil {
 			return LoopbackIp, err
@@ -80,7 +81,7 @@ func ListenForInfo(recieve_broadcast_channel chan<- string) {
 		buff := make([]byte, bufSize)
 		_, _, e := conn.ReadFrom(buff)
 		if e != nil {
-			fmt.Printf("Error when recieving with UDP on port %d: \"%+v\"\n", UDPPort, e)
+			rblog.Red.Printf("Error when recieving with UDP on port %d: \"%+v\"\n", UDPPort, e)
 		} else {
 			// Trim trailing \0
 			index := bytes.IndexByte(buff, 0)
@@ -109,7 +110,7 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 		if bcastAddr != nil {
 			_, e := bcastConn.WriteTo([]byte(localIP), bcastAddr)
 			if e != nil {
-				fmt.Printf("Error when broadcasting: %+v", e)
+				rblog.Red.Printf("Error when broadcasting: %+v", e)
 			}
 		}
 		time.Sleep(deltaT)
@@ -117,14 +118,14 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 }
 
 func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, UDPRecieveChannel <-chan string, mseUpdatedIPMapChannel chan<- ToMSE) {
-	knownMap := make(map[string]int) // Known IP-addresses with number keeping track of 'aliveness'
-	aliveMap := make(map[string]struct{})  // IP-addresses that sent keep-alive over UDP
-	timer := time.NewTicker(deltaT)  // Timer to check for keep-alive messages
+	knownMap := make(map[string]int)      // Known IP-addresses with number keeping track of 'aliveness'
+	aliveMap := make(map[string]struct{}) // IP-addresses that sent keep-alive over UDP
+	timer := time.NewTicker(deltaT)       // Timer to check for keep-alive messages
 	hasChanged := false
 	defer timer.Stop()
 	for {
 		select {
-		case IPAddr := <- UDPRecieveChannel:
+		case IPAddr := <-UDPRecieveChannel:
 			// Received keep alive message
 			aliveMap[IPAddr] = struct{}{}
 			_, exists := knownMap[IPAddr]
@@ -153,7 +154,7 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 			}
 
 			// Check if master-slave-configuration needs to be updated
-			if hasChanged{
+			if hasChanged {
 				localIP, _ := LocalIP()
 				// Run master slave election
 				copyKnownMap := MakeDeepCopyMap(knownMap)
@@ -168,7 +169,7 @@ func IPToNum(ipAddress string) int {
 	ip_as_string := strings.Join(strings.Split(ipAddress, "."), "")
 	ip_as_num, err := strconv.Atoi(ip_as_string)
 	if err != nil {
-		fmt.Printf("Error when casting IP address to num.\n")
+		rblog.Red.Printf("Error when casting IP address to num.\n")
 	}
 	return ip_as_num
 }
@@ -182,10 +183,10 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 	for mseData := range updatedIPAddressCh {
 		localIP := mseData.LocalIP
 		IPAddressMap := mseData.IPAddressMap
-		fmt.Printf("%sCurrent active IP's: %+v%s\n", ColorYellow, IPAddressMap, ColorReset)
+		rblog.Yellow.Printf("%sCurrent active IP's: %+v%s\n", ColorYellow, IPAddressMap, ColorReset)
 		role := Unknown
 		highestIPInt = 0
-		if len(IPAddressMap) <= 1 || localIP == LoopbackIp { // Elevator is disconnected
+		if len(IPAddressMap) <= 1 { // Elevator is disconnected
 			lastRole = Master
 			lastHighestIP = LoopbackIp // (Always smaller than a regular IP)
 			mseCh <- FromMSE{ElevatorRole: Master, MasterIP: LoopbackIp, CurrentIPAddressMap: IPAddressMap}
