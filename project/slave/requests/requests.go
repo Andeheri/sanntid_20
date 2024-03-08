@@ -15,7 +15,8 @@ type DirnBehaviourPair struct {
 	Behaviour elevator.ElevatorBehaviour
 }
 
-func above(e elevator.Elevator) bool {
+func requestsAbove(e elevator.Elevator) bool {
+	if e.Floor == -1 {return false}
 	for f := e.Floor + 1; f < iodevice.N_FLOORS; f++ {
 		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
 			if e.Requests[f][btn] != 0 {
@@ -26,7 +27,8 @@ func above(e elevator.Elevator) bool {
 	return false
 }
 
-func below(e elevator.Elevator) bool {
+func requestsBelow(e elevator.Elevator) bool {
+	if e.Floor == -1 {return false}
 	for f := 0; f < e.Floor; f++ {
 		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
 			if e.Requests[f][btn] != 0 {
@@ -37,8 +39,7 @@ func below(e elevator.Elevator) bool {
 	return false
 }
 
-func here(e elevator.Elevator) bool {
-	//TODO: check
+func requestsHere(e elevator.Elevator) bool {
 	if e.Floor == -1 {return false}
 	for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
 		if e.Requests[e.Floor][btn] != 0 {
@@ -51,33 +52,33 @@ func here(e elevator.Elevator) bool {
 func ChooseDirection(e elevator.Elevator) DirnBehaviourPair {
 	switch e.Dirn {
 	case elevio.MD_Up:
-		if above(e) {
+		if requestsAbove(e) {
 			return DirnBehaviourPair{elevio.MD_Up, elevator.EB_Moving}
-		} else if here(e) {
+		} else if requestsHere(e) {
 			return DirnBehaviourPair{elevio.MD_Down, elevator.EB_DoorOpen}
-		} else if below(e) {
+		} else if requestsBelow(e) {
 			return DirnBehaviourPair{elevio.MD_Down, elevator.EB_Moving}
 		} else {
 			return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_Idle}
 		}
 
 	case elevio.MD_Down:
-		if below(e) {
+		if requestsBelow(e) {
 			return DirnBehaviourPair{elevio.MD_Down, elevator.EB_Moving}
-		} else if here(e) {
+		} else if requestsHere(e) {
 			return DirnBehaviourPair{elevio.MD_Up, elevator.EB_DoorOpen}
-		} else if above(e) {
+		} else if requestsAbove(e) {
 			return DirnBehaviourPair{elevio.MD_Up, elevator.EB_Moving}
 		} else {
 			return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_Idle}
 		}
 
 	case elevio.MD_Stop:
-		if here(e) {
+		if requestsHere(e) {
 			return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_DoorOpen}
-		} else if above(e) {
+		} else if requestsAbove(e) {
 			return DirnBehaviourPair{elevio.MD_Up, elevator.EB_Moving}
-		} else if below(e) {
+		} else if requestsBelow(e) {
 			return DirnBehaviourPair{elevio.MD_Down, elevator.EB_Moving}
 		} else {
 			return DirnBehaviourPair{elevio.MD_Stop, elevator.EB_Idle}
@@ -91,9 +92,9 @@ func ChooseDirection(e elevator.Elevator) DirnBehaviourPair {
 func ShouldStop(e elevator.Elevator) bool {
 	switch e.Dirn {
 	case elevio.MD_Down:
-		return e.Requests[e.Floor][elevio.BT_HallDown] != 0 || e.Requests[e.Floor][elevio.BT_Cab] != 0 || !below(e)
+		return e.Requests[e.Floor][elevio.BT_HallDown] != 0 || e.Requests[e.Floor][elevio.BT_Cab] != 0 || !requestsBelow(e)
 	case elevio.MD_Up:
-		return e.Requests[e.Floor][elevio.BT_HallUp] != 0 || e.Requests[e.Floor][elevio.BT_Cab] != 0 || !above(e)
+		return e.Requests[e.Floor][elevio.BT_HallUp] != 0 || e.Requests[e.Floor][elevio.BT_Cab] != 0 || !requestsAbove(e)
 	case elevio.MD_Stop:
 	default:
 		return true
@@ -126,13 +127,13 @@ func ClearAtCurrentFloor(e elevator.Elevator, clearRequest chan<- interface{}) e
 
 		switch e.Dirn {
 		case elevio.MD_Up:
-			if !above(e) && e.Requests[e.Floor][elevio.BT_HallUp] == 0 {
+			if !requestsAbove(e) && e.Requests[e.Floor][elevio.BT_HallUp] == 0 {
 				e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
 			}
 			e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
 
 		case elevio.MD_Down:
-			if !below(e) && e.Requests[e.Floor][elevio.BT_HallDown] == 0 {
+			if !requestsBelow(e) && e.Requests[e.Floor][elevio.BT_HallDown] == 0 {
 				e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
 			}
 			e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
