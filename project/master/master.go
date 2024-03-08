@@ -7,6 +7,7 @@ import (
 	"project/master/server"
 	"project/mscomm"
 	"project/rblog"
+	"reflect"
 	"time"
 )
 
@@ -21,6 +22,8 @@ var applicationTimeoutCh chan string
 var statePending map[string]struct{}
 
 func Run(masterPort int, quitCh chan struct{}) {
+
+	rblog.Magenta.Print("--- Starting master ---")
 
 	const floorCount int = 4
 
@@ -184,7 +187,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				}
 
 			default:
-				rblog.Println("master received unknown message type from", message.Addr)
+				rblog.Red.Println("master received unknown message type", reflect.TypeOf(message.Payload).Name(), "from", message.Addr)
 
 			}
 		case <-time.After(watchdogResetPeriod):
@@ -197,7 +200,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 
 func onConnectionEvent(slave *mscomm.ConnectionEvent) {
 	if slave.Connected {
-		rblog.Green.Println("slave connected: ", slave.Addr)
+		rblog.Magenta.Println("slave connected: ", slave.Addr)
 		slaveChans[slave.Addr] = slave.Ch
 
 		//reset timer if already exists??
@@ -206,7 +209,7 @@ func onConnectionEvent(slave *mscomm.ConnectionEvent) {
 		})
 		slave.Ch <- mscomm.RequestHallRequests{}
 	} else {
-		rblog.Yellow.Println("slave disconnected: ", slave.Addr)
+		rblog.Magenta.Println("slave disconnected: ", slave.Addr)
 		close(slaveChans[slave.Addr])
 		delete(slaveChans, slave.Addr)
 		delete(communityState.States, slave.Addr)
