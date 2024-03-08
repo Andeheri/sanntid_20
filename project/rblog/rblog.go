@@ -1,6 +1,7 @@
 // 🌈 Rainbow logger 🌈
 // Replace fmt with rblog to get a timestamp and filename:linenumber prefix in your logs.
 // Replace fmt with rblog.Red, rblog.Green, rblog.Yellow, rblog.Blue, rblog.Magenta, or rblog.Cyan to get colored logs.
+// Replace fmt with rblog.Rainbow to get rainbow logs🌈🌈🌈.
 // Print and Println are equivalent and will both add a newline to the end of the log, but are both kept for drop-in compatibility with fmt.
 package rblog
 
@@ -23,6 +24,11 @@ var (
 	reset   string = "\033[0m"
 )
 
+type specialColor string
+
+var Rainbow specialColor = "🌈"
+var rainbowSequence = []string{"\033[1;37;41m", "\033[1;30;43m", "\033[1;30;42m", "\033[1;30;46m", "\033[1;37;44m", "\033[1;37;45m"}
+
 var std = log.New(os.Stdout, "", log.Ltime|log.Lshortfile)
 
 func Print(v ...any) {
@@ -37,17 +43,37 @@ func Println(v ...any) {
 	std.Output(2, fmt.Sprintln(v...))
 }
 
-func (l *color) Print(v ...any) {
-	out := string(*l) + fmt.Sprint(v...) + reset
+func (c *color) Print(v ...any) {
+	out := string(*c) + fmt.Sprint(v...) + reset
 	std.Output(2, out)
 }
 
-func (l *color) Printf(format string, v ...any) {
-	out := string(*l) + fmt.Sprintf(format, v...) + reset
+func (c *color) Printf(format string, v ...any) {
+	out := string(*c) + fmt.Sprintf(format, v...) + reset
 	std.Output(2, out)
 }
 
-func (l *color) Println(v ...any) {
-	out := string(*l) + fmt.Sprint(v...) + reset
+func (c *color) Println(v ...any) {
+	out := string(*c) + fmt.Sprint(v...) + reset
 	std.Output(2, out)
+}
+
+func (c *specialColor) Print(v ...any) {
+	result := ""
+	for i, char := range fmt.Sprint(v...) {
+		result += rainbowSequence[i%len(rainbowSequence)] + string(char)
+	}
+	std.Output(2, result+reset)
+}
+
+func (c *specialColor) Printf(format string, v ...any) {
+	result := ""
+	for i, char := range fmt.Sprintf(format, v...) {
+		result += rainbowSequence[i%len(rainbowSequence)] + string(char)
+	}
+	std.Output(2, result+reset)
+}
+
+func (c *specialColor) Println(v ...any) {
+	c.Print(v...)
 }
