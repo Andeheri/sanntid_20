@@ -2,9 +2,9 @@ package scout
 
 import (
 	"bytes"
-	. "elevator/constants"
-	"elevator/rblog"
-	"elevator/scout/conn"
+	. "project/constants"
+	"project/rblog"
+	"project/scout/conn"
 	"fmt"
 	"net"
 	"strconv"
