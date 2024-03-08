@@ -27,6 +27,7 @@ var (
 type specialColor string
 
 var Rainbow specialColor = "🌈"
+
 var rainbowSequence = []string{"\033[1;37;41m", "\033[1;30;43m", "\033[1;30;42m", "\033[1;30;46m", "\033[1;37;44m", "\033[1;37;45m"}
 
 var std = log.New(os.Stdout, "", log.Ltime|log.Lshortfile)
@@ -59,25 +60,29 @@ func (c *color) Println(v ...any) {
 }
 
 func (c *specialColor) Print(v ...any) {
-	result := ""
-	for i, char := range fmt.Sprint(v...) {
-		result += rainbowSequence[i%len(rainbowSequence)] + string(char)
-	}
-	std.Output(2, result+reset)
+	s := rainbowify(fmt.Sprint(v...))
+	std.Output(2, s)
 }
 
 func (c *specialColor) Printf(format string, v ...any) {
-	result := ""
-	for i, char := range fmt.Sprintf(format, v...) {
-		result += rainbowSequence[i%len(rainbowSequence)] + string(char)
-	}
-	std.Output(2, result+reset)
+	s := rainbowify(fmt.Sprintf(format, v...))
+	std.Output(2, s)
 }
 
 func (c *specialColor) Println(v ...any) {
+	s := rainbowify(fmt.Sprint(v...))
+	std.Output(2, s)
+}
+
+func rainbowify(s string) string {
 	result := ""
-	for i, char := range fmt.Sprint(v...) {
+	for i, char := range s {
 		result += rainbowSequence[i%len(rainbowSequence)] + string(char)
 	}
-	std.Output(2, result+reset)
+	// Remove the newline at the end of string to avoid double newlines
+	// Newline will be added back by std.Output
+	if result[len(result)-1] == '\n' {
+		result = result[:len(result)-1]
+	}
+	return result + reset
 }
