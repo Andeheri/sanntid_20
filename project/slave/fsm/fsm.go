@@ -23,8 +23,10 @@ func Init(doorTimer *time.Timer, clearRequest chan<- interface{}){
     Elev.Dirn = elevio.MD_Stop;
     Elev.Behaviour = elevator.EB_Idle;
 
+    floor := elevio.GetFloor()
+    Elev.Floor = floor
     // Code for fixing starting position between or below floors
-    if elevio.GetFloor() == -1 {
+    if floor == -1 {
         outputDevice.MotorDirection(elevio.MD_Down);
         Elev.Dirn = elevio.MD_Down;
         Elev.Behaviour = elevator.EB_Moving;
