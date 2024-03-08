@@ -121,6 +121,8 @@ type ConnectionEvent struct {
 	Ch        chan interface{}
 }
 
+// Intended to run as a goroutine
+// Returns when conn is closed
 func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- ConnectionEvent, allowedTypes ...reflect.Type) {
 	defer conn.Close()
 	addr := conn.RemoteAddr().String()
@@ -161,7 +163,8 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 
 }
 
-// is a sender thread necessary??? can't master just send directly?
+// Intended to run as a goroutine
+// Returns when conn is closed or ch is closed
 func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 
 	defer conn.Close()

@@ -21,6 +21,8 @@ func Listen(port int) (*net.TCPListener, error) {
 	return listener, nil
 }
 
+//Intended to run as a goroutine
+//Returns when listener is closed
 func Acceptor(listener *net.TCPListener, fromSlaveCh chan mscomm.Package, connectionEventCh chan mscomm.ConnectionEvent) {
 
 	defer listener.Close()
@@ -38,7 +40,7 @@ func Acceptor(listener *net.TCPListener, fromSlaveCh chan mscomm.Package, connec
 		slaveConn, err := listener.AcceptTCP()
 		if err != nil {
 			fmt.Println("Error:", err)
-			continue
+			return
 		}
 
 		slaveAddr := slaveConn.RemoteAddr().String()
