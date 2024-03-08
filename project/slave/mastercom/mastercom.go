@@ -27,7 +27,7 @@ func StartUp(address string, senderCh <-chan interface{}, fromMasterCh chan<- ms
 		masterConn, err = net.DialTCP("tcp", nil, masterAddress)
 		if err != nil {
 			elevio.SetMotorDirection(elevio.MD_Stop)
-			panic("Error connecting to new master")
+			panic("Error connecting to new master:")
 		}
 	}
 
@@ -49,7 +49,6 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 
 	switch reflect.TypeOf(payload) {
 	case reflect.TypeOf(mscomm.RequestState{}):
-		fmt.Println("State requested by master")
 		select {
 		case senderCh <- fsm.GetState():
 		case <-time.After(10 * time.Millisecond):
@@ -57,7 +56,6 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		}
 
 	case reflect.TypeOf(mscomm.RequestHallRequests{}):
-		fmt.Println("Master requested Hallrequests")
 		select {
 		case senderCh <- hallRequests:
 		case <-time.After(10 * time.Millisecond):
@@ -65,7 +63,6 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		}
 
 	case reflect.TypeOf(mscomm.SyncRequests{}):
-		fmt.Println("Received Syncrequests")
 		hallRequests = payload.(mscomm.SyncRequests).Requests
 		select {
 		case senderCh <- mscomm.SyncOK{Id: payload.(mscomm.SyncRequests).Id}:
@@ -74,14 +71,12 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		}
 
 	case reflect.TypeOf(mscomm.Lights{}):
-		fmt.Println("Received halllights", payload.(mscomm.Lights))
 		fsm.Elev.HallLights = payload.(mscomm.Lights)
 		fsm.SetAllLights(&fsm.Elev)
 		//should also set hallrequests as lights are higher rank
 		hallRequests = mscomm.HallRequests(payload.(mscomm.Lights))
 
 	case reflect.TypeOf(mscomm.AssignedRequests{}):
-		fmt.Println("Received assigned requests")
 		fsm.RequestsClearAll()
 		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, senderCh)
 

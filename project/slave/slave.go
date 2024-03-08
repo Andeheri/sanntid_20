@@ -45,11 +45,9 @@ func Start(masterAddressCh <-chan string) {
 	for {
 		select {
 		case a := <-drvButtonsCh:
-			fmt.Printf("Buttons: %+v\n", a)
 			if a.Button == elevio.BT_Cab{
 				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, senderCh)
 			} else{
-				fmt.Println(a, "sender button press melding")
 				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
 				select {
 				case senderCh <- pressed:
@@ -59,15 +57,13 @@ func Start(masterAddressCh <-chan string) {
 			}
 
 		case a := <-drvFloorsCh:
-			fmt.Printf("Floor: %+v\n", a)
 			fsm.OnFloorArrival(a, doorTimer, senderCh)
 
 		case a := <-drvObstrCh:
 			fmt.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
 
-		case a := <-doorTimer.C:
-			fmt.Printf("Doortimer: %+v\n", a)
+		case <-doorTimer.C:
 			fsm.OnDoorTimeout(doorTimer, senderCh)
 
 		case a := <-masterAddressCh:
@@ -78,7 +74,6 @@ func Start(masterAddressCh <-chan string) {
 			masterConn = mastercom.StartUp(a, senderCh, fromMasterCh)
 
 		case a := <-fromMasterCh:
-			fmt.Println(a, "mottat melding fra master")
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer)
 
 		case <- time.After(watchDogTime/5):

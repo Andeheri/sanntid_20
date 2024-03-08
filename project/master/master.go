@@ -7,7 +7,6 @@ import (
 	"project/master/server"
 	"project/mscomm"
 	"project/rblog"
-	"reflect"
 	"time"
 )
 
@@ -87,8 +86,6 @@ func Run(masterPort int, quitCh chan struct{}) {
 			}
 			//wait for all slaves to disconnect
 		case message := <-fromSlaveCh:
-			rblog.Println("received", reflect.TypeOf(message.Payload), "from", message.Addr)
-			rblog.Println(message.Payload)
 
 			switch message.Payload.(type) {
 

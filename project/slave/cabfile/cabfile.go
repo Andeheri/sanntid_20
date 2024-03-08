@@ -79,7 +79,7 @@ func Set(floor int) error {
 	if err := writeToFiles(data); err != nil {
 		return err
 	}
-	fmt.Println("Cabdata written successfully to files, (set).")
+	// fmt.Println("Cabdata written successfully to files, (set).")
 	return nil
 }
 
@@ -92,7 +92,7 @@ func Clear(floor int) error {
 	if err := writeToFiles(data); err != nil {
 		return err
 	}
-	fmt.Println("Cabdata written successfully to files, (cleared).")
+	// fmt.Println("Cabdata written successfully to files, (cleared).")
 	return nil
 }
 

@@ -179,8 +179,6 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 			return
 		}
 
-		rblog.Println(data, reflect.TypeOf(data))
-
 		ttj, err := NewTypeTaggedJSON(data)
 		if err != nil {
 			rblog.Red.Println(err)

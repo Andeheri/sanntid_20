@@ -122,7 +122,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 
 
 func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequestCh chan<- interface{}){
-    fmt.Printf("\n(newfloor: %d)\n",newFloor)
+    // fmt.Printf("\n(newfloor: %d)\n",newFloor)
     Elev.Print();
 
     Elev.Floor = newFloor;
@@ -132,7 +132,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequestCh chan<- i
     switch(Elev.Behaviour){
     case elevator.EB_Moving:
         if requests.ShouldStop(Elev){
-            fmt.Println("Opening door")
+            // fmt.Println("Opening door")
             outputDevice.MotorDirection(elevio.MD_Stop);
             outputDevice.DoorLight(true);
             Elev = requests.ClearAtCurrentFloor(Elev, clearRequestCh);
@@ -152,7 +152,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, clearRequestCh chan<- i
 
 
 func OnDoorTimeout(doorTimer *time.Timer, clearRequestCh chan<- interface{}){
-    fmt.Println("\n(doorTimeout)")
+    // fmt.Println("\n(doorTimeout)")
     
     Elev.Print();
     
