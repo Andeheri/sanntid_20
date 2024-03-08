@@ -75,5 +75,9 @@ func (c *specialColor) Printf(format string, v ...any) {
 }
 
 func (c *specialColor) Println(v ...any) {
-	c.Print(v...)
+	result := ""
+	for i, char := range fmt.Sprint(v...) {
+		result += rainbowSequence[i%len(rainbowSequence)] + string(char)
+	}
+	std.Output(2, result+reset)
 }
