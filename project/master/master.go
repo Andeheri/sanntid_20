@@ -21,7 +21,7 @@ var applicationTimeoutCh chan string
 
 var statePending map[string]struct{}
 
-func Run(quitCh chan struct{}) {
+func Run(masterPort int, quitCh chan struct{}) {
 
 	const floorCount int = 4
 
@@ -57,7 +57,6 @@ func Run(quitCh chan struct{}) {
 
 	statePending = make(map[string]struct{})
 
-	const masterPort = 12221
 	listener, err := server.Listen(masterPort)
 	if err != nil {
 		panic(fmt.Sprint("Could not get listener", err))

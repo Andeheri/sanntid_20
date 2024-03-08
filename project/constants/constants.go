@@ -13,21 +13,10 @@ const (
 	Unknown Role = "unknown"
 )
 
-type FromMSE struct {
-	ElevatorRole  Role
-	MasterIP string
-	CurrentIPAddressMap map[string]int
-}
-
-type ToMSE struct {
-	LocalIP string
-	IPAddressMap map[string]int
-}
-
 // Variables to tweak system
 const (
 	UDPPort                 int           = 23456
-	MasterPort              string        = "1861"
+	MasterPort              int           = 1861
 	LoopbackIp              string        = "127.0.0.1"
 	NumKeepAlive            int           = 5 // Number of missed keep-alive messages missed before assumed offline
 	DeltaTKeepAlive         time.Duration = 50 * time.Millisecond

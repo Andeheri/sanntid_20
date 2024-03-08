@@ -12,6 +12,17 @@ import (
 	"time"
 )
 
+type FromMSE struct {
+	ElevatorRole  Role
+	MasterIP string
+	CurrentIPAddressMap map[string]int
+}
+
+type ToMSE struct {
+	LocalIP string
+	IPAddressMap map[string]int
+}
+
 var localIP string = LoopbackIp
 
 func LocalIP() (string, error) {
