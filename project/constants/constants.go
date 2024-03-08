@@ -14,9 +14,9 @@ const (
 )
 
 type FromMSE struct {
-	Role  Role
-	IP string
-	IPAddressMap map[string]int
+	ElevatorRole  Role
+	MasterIP string
+	CurrentIPAddressMap map[string]int
 }
 
 type ToMSE struct {
@@ -24,11 +24,21 @@ type ToMSE struct {
 	IPAddressMap map[string]int
 }
 
+// Variables to tweak system
 const (
-	UDPPort               int           = 23456
-	MasterPort            string        = "1861"
-	DeltaTKeepAlive       time.Duration = 100 * time.Millisecond
-	DeltaTMissedKeepAlive time.Duration = 50 * time.Millisecond
-	NumKeepAlive          int           = 5 // Number of missed keep-alive messages missed before assumed offline
-	LoopbackIp            string        = "127.0.0.1"
+	UDPPort                 int           = 23456
+	MasterPort              string        = "1861"
+	LoopbackIp              string        = "127.0.0.1"
+	NumKeepAlive            int           = 5 // Number of missed keep-alive messages missed before assumed offline
+	DeltaTKeepAlive         time.Duration = 50 * time.Millisecond
+	DeltaTSamplingKeepAlive time.Duration = 100 * time.Millisecond
+)
+
+// Colored text
+const (
+	ColorReset = "\033[0m"
+	ColorYellow = "\033[33m"
+	ColorCyan  = "\033[36m"
+	ColorGreen = "\033[32m"
+	ColorRed   = "\033[31m"
 )

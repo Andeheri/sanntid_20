@@ -147,7 +147,6 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 					knownMap[ip] = numKeepAlive // Reset back to numKeepAlive since it's alive
 				}
 			}
-
 			// Clear the aliveMap for the next interval
 			for ip := range aliveMap {
 				delete(aliveMap, ip)
@@ -183,13 +182,13 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 	for mseData := range updatedIPAddressCh {
 		localIP := mseData.LocalIP
 		IPAddressMap := mseData.IPAddressMap
-		fmt.Printf("Master-slave election: %v\n", IPAddressMap)
+		fmt.Printf("%sCurrent active IP's: %+v%s\n", ColorYellow, IPAddressMap, ColorReset)
 		role := Unknown
 		highestIPInt = 0
 		if len(IPAddressMap) <= 1 || localIP == LoopbackIp { // Elevator is disconnected
 			lastRole = Master
 			lastHighestIP = LoopbackIp // (Always smaller than a regular IP)
-			mseCh <- FromMSE{Role: Master, IP: LoopbackIp, IPAddressMap: IPAddressMap}
+			mseCh <- FromMSE{ElevatorRole: Master, MasterIP: LoopbackIp, CurrentIPAddressMap: IPAddressMap}
 			continue
 		}
 
@@ -211,7 +210,7 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 			if lastRole != role || lastHighestIP != highestIPString {
 				lastRole = role
 				lastHighestIP = highestIPString
-				mseCh <- FromMSE{Role: role, IP: highestIPString, IPAddressMap: IPAddressMap}
+				mseCh <- FromMSE{ElevatorRole: role, MasterIP: highestIPString, CurrentIPAddressMap: IPAddressMap}
 			}
 		}
 	}
