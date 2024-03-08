@@ -25,8 +25,6 @@ func Listen(port int) (*net.TCPListener, error) {
 //Returns when listener is closed
 func Acceptor(listener *net.TCPListener, fromSlaveCh chan mscomm.Package, connectionEventCh chan mscomm.ConnectionEvent) {
 
-	defer listener.Close()
-
 	allowedTypes := [...]reflect.Type{
 		reflect.TypeOf(mscomm.ElevatorState{}),
 		reflect.TypeOf(mscomm.ButtonPressed{}),

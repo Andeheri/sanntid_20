@@ -21,7 +21,7 @@ var applicationTimeoutCh chan string
 
 var statePending map[string]struct{}
 
-func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.ConnectionEvent, quitCh chan struct{}) {
+func Run(quitCh chan struct{}) {
 
 	const floorCount int = 4
 
@@ -62,6 +62,11 @@ func Run(fromSlaveCh chan mscomm.Package, slaveConnEventCh chan mscomm.Connectio
 	if err != nil {
 		panic(fmt.Sprint("Could not get listener", err))
 	}
+	defer listener.Close()
+
+	fromSlaveCh := make(chan mscomm.Package)
+	slaveConnEventCh := make(chan mscomm.ConnectionEvent)
+
 	go server.Acceptor(listener, fromSlaveCh, slaveConnEventCh)
 
 	for {
