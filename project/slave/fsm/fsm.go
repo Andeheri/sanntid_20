@@ -2,7 +2,6 @@ package fsm
 
 import (
 	"fmt"
-	"log"
 	"project/mscomm"
 	"project/slave/cabfile"
 	"project/slave/elevator"
@@ -23,21 +22,11 @@ func Init(doorTimer *time.Timer, clearRequest chan<- interface{}){
     Elev.Dirn = elevio.MD_Stop;
     Elev.Behaviour = elevator.EB_Idle;
 
-    floor := elevio.GetFloor()
-    Elev.Floor = floor
-    // Code for fixing starting position between or below floors
-    if floor == -1 {
+    // Code for fixing starting position between floors
+    if elevio.GetFloor() == -1 {
         outputDevice.MotorDirection(elevio.MD_Down);
         Elev.Dirn = elevio.MD_Down;
         Elev.Behaviour = elevator.EB_Moving;
-        //TODO: test this at the lab:
-        time.AfterFunc(3*time.Second, func() {
-            if Elev.Floor == -1{
-                log.Println("afterfunc below floors")
-                outputDevice.MotorDirection(elevio.MD_Up);
-                Elev.Dirn = elevio.MD_Up;
-            }
-        })
     }
     
     cabRequests := cabfile.Read()
