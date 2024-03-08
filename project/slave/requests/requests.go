@@ -113,12 +113,12 @@ func ShouldClearImmediately(e elevator.Elevator, btn_floor int, btn_type elevio.
 	}
 }
 
-func ClearAtCurrentFloor(e elevator.Elevator, clearRequest chan<- interface{}) elevator.Elevator {
+func ClearAtCurrentFloor(e elevator.Elevator, clearRequestCh chan<- interface{}) elevator.Elevator {
 
 	switch e.Config.ClearRequestVariant {
 	case elevator.CV_All:
 		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
-			e = clear(e, e.Floor, elevio.ButtonType(btn), clearRequest)
+			e = clear(e, e.Floor, elevio.ButtonType(btn), clearRequestCh)
 		}
 
 	case elevator.CV_InDirn:
@@ -128,22 +128,22 @@ func ClearAtCurrentFloor(e elevator.Elevator, clearRequest chan<- interface{}) e
 		switch e.Dirn {
 		case elevio.MD_Up:
 			if !requestsAbove(e) && e.Requests[e.Floor][elevio.BT_HallUp] == 0 {
-				e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
+				e = clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
 			}
-			e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
+			e = clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
 
 		case elevio.MD_Down:
 			if !requestsBelow(e) && e.Requests[e.Floor][elevio.BT_HallDown] == 0 {
-				e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
+				e = clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
 			}
-			e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
+			e = clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
 
 		case elevio.MD_Stop:
-			e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
-			e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
+			e = clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
+			e = clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
 		default:
-			e = clear(e, e.Floor, elevio.BT_HallUp, clearRequest)
-			e = clear(e, e.Floor, elevio.BT_HallDown, clearRequest)
+			e = clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
+			e = clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
 		}
 
 	default:
@@ -152,11 +152,11 @@ func ClearAtCurrentFloor(e elevator.Elevator, clearRequest chan<- interface{}) e
 	return e
 }
 
-func clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clearRequest chan<- interface{}) elevator.Elevator {
+func clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clearRequestCh chan<- interface{}) elevator.Elevator {
 	e.Requests[floor][btnType] = 0
 	e.HallLights[floor][btnType] = false
 	select {
-	case clearRequest <- mscomm.OrderComplete{Floor: floor, Button: int(btnType)}:
+	case clearRequestCh <- mscomm.OrderComplete{Floor: floor, Button: int(btnType)}:
 	case <-time.After(10 * time.Millisecond):
 		log.Println("Sending ordercomplete timed out")
 	}

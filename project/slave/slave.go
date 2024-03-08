@@ -11,25 +11,25 @@ import (
 	"time"
 )
 
-func Start(masterAddress <-chan string) {
+func Start(masterAddressCh <-chan string) {
 	numFloors := 4
 
 	elevio.Init("localhost:15657", numFloors)
 
-	drvButtons := make(chan elevio.ButtonEvent)
-	drvFloors := make(chan int)
-	drvObstr := make(chan bool)
+	drvButtonsCh := make(chan elevio.ButtonEvent)
+	drvFloorsCh := make(chan int)
+	drvObstrCh := make(chan bool)
 
-	go elevio.PollButtons(drvButtons)
-	go elevio.PollFloorSensor(drvFloors)
-	go elevio.PollObstructionSwitch(drvObstr)
+	go elevio.PollButtons(drvButtonsCh)
+	go elevio.PollFloorSensor(drvFloorsCh)
+	go elevio.PollObstructionSwitch(drvObstrCh)
 
 	doorTimer := time.NewTimer(-1) 
 	                           
-	sender := make(chan interface{})
+	senderCh := make(chan interface{})
 	fromMasterCh := make(chan mscomm.Package)
 
-	fsm.Init(doorTimer, sender)
+	fsm.Init(doorTimer, senderCh)
 
 	var masterConn *net.TCPConn
 
@@ -44,42 +44,42 @@ func Start(masterAddress <-chan string) {
 
 	for {
 		select {
-		case a := <-drvButtons:
+		case a := <-drvButtonsCh:
 			fmt.Printf("Buttons: %+v\n", a)
 			if a.Button == elevio.BT_Cab{
-				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, sender)
+				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, senderCh)
 			} else{
 				fmt.Println(a, "sender button press melding")
 				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
 				select {
-				case sender <- pressed:
+				case senderCh <- pressed:
 				case <-time.After(10 * time.Millisecond):
 					log.Println("Timed out on sending button press")
 				}
 			}
 
-		case a := <-drvFloors:
+		case a := <-drvFloorsCh:
 			fmt.Printf("Floor: %+v\n", a)
-			fsm.OnFloorArrival(a, doorTimer, sender)
+			fsm.OnFloorArrival(a, doorTimer, senderCh)
 
-		case a := <-drvObstr:
+		case a := <-drvObstrCh:
 			fmt.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
 
 		case a := <-doorTimer.C:
 			fmt.Printf("Doortimer: %+v\n", a)
-			fsm.OnDoorTimeout(doorTimer, sender)
+			fsm.OnDoorTimeout(doorTimer, senderCh)
 
-		case a := <-masterAddress:
+		case a := <-masterAddressCh:
 			fmt.Println("mottat ny master addresse:", a)
 			if masterConn != nil {
 				masterConn.Close()
 			}
-			masterConn = mastercom.StartUp(a, sender, fromMasterCh)
+			masterConn = mastercom.StartUp(a, senderCh, fromMasterCh)
 
 		case a := <-fromMasterCh:
 			fmt.Println(a, "mottat melding fra master")
-			mastercom.HandleMessage(a.Payload, sender, doorTimer)
+			mastercom.HandleMessage(a.Payload, senderCh, doorTimer)
 
 		case <- time.After(watchDogTime/5):
 		}	
