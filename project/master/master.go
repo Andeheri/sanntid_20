@@ -25,12 +25,15 @@ type syncAttemptType struct {
 }
 
 const (
+	collectStateTimeout time.Duration = 500 * time.Millisecond
 	applicationTimeout  time.Duration = 500 * time.Millisecond
 	syncTimeout         time.Duration = 500 * time.Millisecond
 	watchdogTimeout     time.Duration = 1000 * time.Millisecond
 	watchdogResetPeriod time.Duration = 300 * time.Millisecond
 	floorCount          int           = 4
 )
+
+var collectStateTimer *time.Timer
 
 var logfile, _ = os.OpenFile("masterlog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 var flog = log.New(logfile, "master: ", log.Ltime|log.Lmicroseconds|log.Lshortfile)
@@ -61,6 +64,12 @@ func Run(masterPort int, quitCh chan struct{}) {
 	applicationTimeoutCh = make(chan string)
 	syncTimeoutCh := make(chan int)
 	terminateCh := make(chan struct{})
+	collectStateTimeoutCh := make(chan struct{})
+
+	collectStateTimer = time.AfterFunc(collectStateTimeout, func() {
+		collectStateTimeoutCh <- struct{}{}
+	})
+	collectStateTimer.Stop()
 
 	fromSlaveCh := make(chan mscomm.Package)
 	slaveConnEventCh := make(chan mscomm.ConnectionEvent)
@@ -95,7 +104,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				flog.Println("[INFO] slave disconnected: ", slave.Addr)
 				rblog.Magenta.Println("slave disconnected: ", slave.Addr)
 				dismiss(slave.Addr)
-				beginAssignment()
+				collectStates()
 			}
 		case addr := <-applicationTimeoutCh:
 			if _, exists := slaves[addr]; !exists {
@@ -110,9 +119,18 @@ func Run(masterPort int, quitCh chan struct{}) {
 			if _, exists := syncAttempts[syncId]; exists {
 				rblog.Yellow.Println("sync attempt timed out")
 				flog.Println("[WARNING] sync attempt timed out", syncAttempts[syncId].pendingSlaves, "did not respond")
-				//dismiss pending slaves??
+				//TODO: fire pending slaves??
 				delete(syncAttempts, syncId)
 			}
+		case <-collectStateTimeoutCh:
+			for addr, slave := range slaves {
+				if slave.statePending {
+					rblog.Yellow.Println("slave did not respond to state request:", addr)
+					flog.Println("[WARNING] slave did not respond to state request:", addr)
+					dismiss(addr)
+				}
+			}
+			assignHallRequests()
 		case <-quitCh:
 			flog.Println("[INFO] master ready to quit")
 			listener.Close()
@@ -149,7 +167,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				rblog.Magenta.Println("slave hired:", message.Addr)
 				flog.Println("[INFO] slave hired:", message.Addr)
 
-				beginAssignment()
+				collectStates()
 
 			case mscomm.ButtonPressed:
 				flog.Println("[INFO] button pressed:", message.Payload.(mscomm.ButtonPressed))
@@ -159,6 +177,19 @@ func Run(masterPort int, quitCh chan struct{}) {
 				}
 
 				syncId := rand.Int()
+
+				anyoneHired := false
+				for _, slave := range slaves {
+					if slave.hired {
+						anyoneHired = true
+						break
+					}
+				}
+
+				if !anyoneHired {
+					rblog.Yellow.Println("Noone hired, cannot sync")
+					continue
+				}
 
 				syncAttempts[syncId] = syncAttemptType{
 					button:        buttonPressed,
@@ -172,13 +203,11 @@ func Run(masterPort int, quitCh chan struct{}) {
 				syncRequests.Requests[buttonPressed.Floor][buttonPressed.Button] = true
 
 				for addr, slave := range slaves {
-					//TODO: if noone is hired, should not create sync attempt.
 					if slave.hired {
 						flog.Println("[INFO] syncing requests to", addr)
 						syncAttempts[syncId].pendingSlaves[addr] = struct{}{}
 						slave.ch <- syncRequests
 					}
-
 				}
 
 				go func() {
@@ -205,27 +234,8 @@ func Run(masterPort int, quitCh chan struct{}) {
 				}
 
 				if !anyonePending {
-					flog.Println("[INFO] ready to assign")
-					if len(communityState.States) == 0 {
-						rblog.Yellow.Println("Noone to assign to")
-						flog.Println("[WARNING] Noone to assign to")
-						continue
-					}
-					//TODO: fix deadlock that occurs right about here - when running assigner executable
-					flog.Println("[INFO] starting assigner executable")
-					assignedRequests, err := assigner.Assign(&communityState)
-					if err != nil {
-						rblog.Red.Println("assigner error:", err)
-						flog.Println("[ERROR] Noone to assign to")
-						continue
-					}
-					flog.Println("[INFO] assigner ran sucessfully:", assignedRequests)
-
-					for addr, requests := range *assignedRequests {
-						flog.Println("[INFO]", addr, "got assigned", requests)
-						slaves[addr].ch <- requests
-						//TODO: timeout if slave does not respond
-					}
+					collectStateTimer.Stop()
+					assignHallRequests()
 				}
 
 			case mscomm.OrderComplete:
@@ -264,7 +274,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 						}
 					}
 					delete(syncAttempts, syncId)
-					beginAssignment()
+					collectStates()
 				}
 
 			default:
@@ -288,13 +298,38 @@ func dismiss(addr string) {
 	delete(communityState.States, addr)
 }
 
-func beginAssignment() {
-	flog.Println("[INFO] Beginning assignment procedure")
+func collectStates() {
+	flog.Println("[INFO] Collect elevator states before assigning")
+	collectStateTimer.Reset(collectStateTimeout)
 	for addr, slave := range slaves {
 		if slave.hired {
 			flog.Println("[INFO] Requesting state from", addr)
 			slave.ch <- mscomm.RequestState{}
 			slave.statePending = true
 		}
+	}
+}
+
+func assignHallRequests() {
+	flog.Println("[INFO] ready to assign")
+	if len(communityState.States) == 0 {
+		rblog.Yellow.Println("Noone to assign to")
+		flog.Println("[WARNING] Noone to assign to")
+		return
+	}
+	//TODO: fix deadlock that occurs right about here - when running assigner executable
+	flog.Println("[INFO] starting assigner executable")
+	assignedRequests, err := assigner.Assign(&communityState)
+	if err != nil {
+		rblog.Red.Println("assigner error:", err)
+		flog.Println("assigner error:", err)
+		return
+	}
+	flog.Println("[INFO] assigner ran sucessfully:", assignedRequests)
+
+	for addr, requests := range *assignedRequests {
+		flog.Println("[INFO]", addr, "got assigned", requests)
+		slaves[addr].ch <- requests
+		//TODO: timeout if slave does not respond
 	}
 }
