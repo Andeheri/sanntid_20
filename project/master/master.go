@@ -25,7 +25,7 @@ type syncAttemptType struct {
 }
 
 const (
-	applicationTimeout  time.Duration = 500 * time.Millisecond //Is a timeout actually needed?
+	applicationTimeout  time.Duration = 500 * time.Millisecond
 	syncTimeout         time.Duration = 500 * time.Millisecond
 	watchdogTimeout     time.Duration = 1000 * time.Millisecond
 	watchdogResetPeriod time.Duration = 300 * time.Millisecond
@@ -52,19 +52,11 @@ func Run(masterPort int, quitCh chan struct{}) {
 	syncAttempts := make(map[int]syncAttemptType)
 
 	//init watchdog
-	//lastAction = "init"
-	//TODO: log last action and print when watchdog triggers
 	watchdog := time.AfterFunc(watchdogTimeout, func() {
 		flog.Println("[ERROR] master deadlock")
 		panic("Vaktbikkje sier voff!🐕‍🦺 - master deadlock?")
 	})
 	defer watchdog.Stop()
-
-	//Careful when sending to slaveChans. If a slave is disconnected, noone will read from the channel, and it will block forever :(
-	//TODO: deal with that
-
-	//Should we have a separate map for hiredSlaves so that we do not attempt to sync and so on with slaves that are still in the application process?
-	//Maybe make a map containing structs that have a channel and a bool for hired or not?
 
 	applicationTimeoutCh = make(chan string)
 	syncTimeoutCh := make(chan int)
@@ -156,8 +148,6 @@ func Run(masterPort int, quitCh chan struct{}) {
 				slaves[message.Addr].hired = true
 				rblog.Magenta.Println("slave hired:", message.Addr)
 				flog.Println("[INFO] slave hired:", message.Addr)
-				//TODO: Should also make sure that the slave receives the hall requests from the master
-				//This will be handled by starting assignment process when the slave is hired???
 
 				beginAssignment()
 
@@ -234,7 +224,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 					for addr, requests := range *assignedRequests {
 						flog.Println("[INFO]", addr, "got assigned", requests)
 						slaves[addr].ch <- requests
-						//TODO: timeout if
+						//TODO: timeout if slave does not respond
 					}
 				}
 
