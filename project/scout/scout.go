@@ -26,7 +26,8 @@ var localIP string = LoopbackIp
 
 func LocalIP() (string, error) {
 	if localIP == LoopbackIp {
-		conn, err := net.DialTCP("tcp4", nil, &net.TCPAddr{IP: []byte{8, 8, 8, 8}, Port: 53})
+		dialer := net.Dialer{Timeout: 500 * time.Millisecond} // Timeout duration
+		conn, err := dialer.Dial("tcp4", "8.8.8.8:53")
 		if err != nil {
 			return LoopbackIp, err
 		}
@@ -134,6 +135,7 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 		role := Unknown
 		highestIPInt = 0
 		if len(IPAddressMap) <= 1 { // Elevator is disconnected or alone
+			rblog.Cyan.Println("--- Master Slave Election ---")
 			lastRole = Master
 			lastMasterIP = LoopbackIp // (Always smaller than a regular IP)
 			mseCh <- FromMSE{ElevatorRole: Master, MasterIP: lastMasterIP, CurrentIPAddressMap: IPAddressMap}
@@ -149,6 +151,7 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 		}
 		
 		if highestIPString != lastMasterIP {
+			rblog.Cyan.Println("--- Master Slave Election ---")
 			if highestIPString == localIP {
 				role = Master
 				} else {

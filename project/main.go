@@ -10,15 +10,10 @@ import (
 	"time"
 )
 
-func startMaster(masterPort string, ipAddressMap map[string]int) {
-	// Should set up TCP-connection to each ip in ipAddressMap
-}
-
 func main() {
 	// Variables
 	elevatorRole := Unknown
 	masterIP := LoopbackIp // Default is loopback address
-	//var ipAddressMap map[string]int
 
 	fmt.Printf("Starting elevator ...\n")
 	time.Sleep(100 * time.Millisecond) // To give elevatorserver time to boot
@@ -46,13 +41,14 @@ func main() {
 	} else {
 		rblog.Green.Printf("Local IP: %s", localIP)
 	}
+	
 	lastRole := Slave
 	for mseData := range fromMSEChannel {
 		// Data recieved from Master Slave Election
 		elevatorRole = mseData.ElevatorRole
 		masterIP = mseData.MasterIP
 		_ = mseData.CurrentIPAddressMap
-		rblog.Cyan.Printf("Elevator role: %s\nMaster IP: %s", elevatorRole, masterIP)
+		rblog.Cyan.Printf("Elevator role: %s | Master IP: %s", elevatorRole, masterIP)
 
 		if elevatorRole == Master && lastRole == Slave {
 			// Start master protocol
