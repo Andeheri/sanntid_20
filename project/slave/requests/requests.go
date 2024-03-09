@@ -1,8 +1,8 @@
 package requests
 
 import (
-	"log"
 	"project/mscomm"
+	"project/rblog"
 	"project/slave/cabfile"
 	"project/slave/elevator"
 	"project/slave/elevio"
@@ -16,7 +16,9 @@ type DirnBehaviourPair struct {
 }
 
 func requestsAbove(e elevator.Elevator) bool {
-	if e.Floor == -1 {return false}
+	if e.Floor == -1 {
+		return false
+	}
 	for f := e.Floor + 1; f < iodevice.N_FLOORS; f++ {
 		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
 			if e.Requests[f][btn] != 0 {
@@ -28,7 +30,9 @@ func requestsAbove(e elevator.Elevator) bool {
 }
 
 func requestsBelow(e elevator.Elevator) bool {
-	if e.Floor == -1 {return false}
+	if e.Floor == -1 {
+		return false
+	}
 	for f := 0; f < e.Floor; f++ {
 		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
 			if e.Requests[f][btn] != 0 {
@@ -40,7 +44,9 @@ func requestsBelow(e elevator.Elevator) bool {
 }
 
 func requestsHere(e elevator.Elevator) bool {
-	if e.Floor == -1 {return false}
+	if e.Floor == -1 {
+		return false
+	}
 	for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
 		if e.Requests[e.Floor][btn] != 0 {
 			return true
@@ -153,7 +159,7 @@ func ClearAtCurrentFloor(e elevator.Elevator, clearRequestCh chan<- interface{})
 }
 
 func Clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clearRequestCh chan<- interface{}) elevator.Elevator {
-	if btnType == elevio.BT_Cab{
+	if btnType == elevio.BT_Cab {
 		return e
 	}
 	e.Requests[floor][btnType] = 0
@@ -161,7 +167,7 @@ func Clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clearReque
 	select {
 	case clearRequestCh <- mscomm.OrderComplete{Floor: floor, Button: int(btnType)}:
 	case <-time.After(10 * time.Millisecond):
-		log.Println("Sending ordercomplete timed out")
+		rblog.Yellow.Println("Sending ordercomplete timed out")
 	}
 	return e
 }

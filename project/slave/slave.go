@@ -1,7 +1,6 @@
 package slave
 
 import (
-	"log"
 	"net"
 	"project/mscomm"
 	"project/rblog"
@@ -10,7 +9,6 @@ import (
 	"project/slave/mastercom"
 	"time"
 )
-
 
 func Start(masterAddressCh <-chan string) {
 	numFloors := 4
@@ -57,7 +55,7 @@ func Start(masterAddressCh <-chan string) {
 				select {
 				case senderCh <- pressed:
 				case <-time.After(10 * time.Millisecond):
-					log.Println("Timed out on sending button press")
+					rblog.Yellow.Println("Timed out on sending button press")
 				}
 			}
 
@@ -88,7 +86,7 @@ func Start(masterAddressCh <-chan string) {
 			} else {
 				rblog.Red.Println("Connection to a new master failed:", a)
 			}
-		
+
 		case <-masterDisconnectCh:
 			close(senderCh)
 			senderCh = make(chan interface{})
@@ -103,7 +101,7 @@ func Start(masterAddressCh <-chan string) {
 	}
 }
 
-func noArrival(){
+func noArrival() {
 	rblog.Red.Println("No floor arrival, setting Elev.Floor = -1")
 	fsm.Elev.Floor = -1
 }

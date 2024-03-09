@@ -1,7 +1,6 @@
 package mastercom
 
 import (
-	"log"
 	"net"
 	"project/mscomm"
 	"project/rblog"
@@ -54,14 +53,14 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		select {
 		case senderCh <- fsm.GetState():
 		case <-time.After(10 * time.Millisecond):
-			log.Println("Sending state timed out")
+			rblog.Yellow.Println("Sending state timed out")
 		}
 
 	case reflect.TypeOf(mscomm.RequestHallRequests{}):
 		select {
 		case senderCh <- hallRequests:
 		case <-time.After(10 * time.Millisecond):
-			log.Println("Sending hallrequests timed out")
+			rblog.Yellow.Println("Sending hallrequests timed out")
 		}
 
 	case reflect.TypeOf(mscomm.SyncRequests{}):
@@ -69,7 +68,7 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		select {
 		case senderCh <- mscomm.SyncOK{Id: payload.(mscomm.SyncRequests).Id}:
 		case <-time.After(10 * time.Millisecond):
-			log.Println("Sending SyncOK timed out")
+			rblog.Yellow.Println("Sending SyncOK timed out")
 		}
 
 	case reflect.TypeOf(mscomm.Lights{}):
