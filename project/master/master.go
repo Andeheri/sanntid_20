@@ -164,6 +164,8 @@ func Run(masterPort int, quitCh chan struct{}) {
 				slaveHallRequests := message.Payload.(mscomm.HallRequests)
 				communityState.HallRequests.Merge(&slaveHallRequests)
 				slaves[message.Addr].hired = true
+				slaves[message.Addr].ch <- mscomm.Lights(communityState.HallRequests)
+				slaves[message.Addr].ch <- communityState.HallRequests
 				rblog.Magenta.Println("slave hired:", message.Addr)
 				flog.Println("[INFO] slave hired:", message.Addr)
 
