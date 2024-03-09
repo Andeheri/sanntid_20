@@ -44,21 +44,28 @@ func main() {
 		rblog.Red.Println("Error when getting local IP. Probably disconnected.")
 		toMSEChannel <- scout.ToMSE{LocalIP: localIP, IPAddressMap: map[string]int{localIP: NumKeepAlive}}
 	} else {
-		rblog.Green.Printf("Local IP: %s\n\n", localIP)
+		rblog.Green.Printf("Local IP: %s", localIP)
 	}
-
+	lastRole := Slave
 	for mseData := range fromMSEChannel {
 		// Data recieved from Master Slave Election
 		elevatorRole = mseData.ElevatorRole
 		masterIP = mseData.MasterIP
 		_ = mseData.CurrentIPAddressMap
-		rblog.Cyan.Printf("\nElevator role: %s\nMaster IP: %s\n\n", elevatorRole, masterIP)
+		rblog.Cyan.Printf("Elevator role: %s\nMaster IP: %s", elevatorRole, masterIP)
 
-		if elevatorRole == Master {
+		if elevatorRole == Master && lastRole == Slave {
 			// Start master protocol
 			rblog.Rainbow.Println("Promoted to Master")
 			go master.Run(MasterPort, masterQuitChannel)
 		}
+		if elevatorRole == Slave && lastRole == Master {
+			// Stop master protocol
+			rblog.Cyan.Println("Demoted to Slave😥")
+			masterQuitChannel <- struct{}{}
+		}
+
+		lastRole = elevatorRole
 
 		// Update master IP-address
 		masterAddressChannel <- fmt.Sprintf("%s:%d", masterIP, MasterPort)

@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 	"project/mscomm"
-	"project/slave/elevio"
+	"project/rblog"
 	"project/slave/fsm"
 	"reflect"
 	"time"
@@ -13,23 +13,28 @@ import (
 
 var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
-func StartUp(address string, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package) *net.TCPConn {
+func EstablishTCPConnection(address string, connCh chan<- *net.TCPConn) {
 
 	masterAddress, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
 		fmt.Println("Error resolving TCP address from master:", err)
 	}
 
-	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
-	if err != nil {
-		fmt.Println("Error connecting to new master:", err)
-		time.Sleep(10 * time.Millisecond)
-		masterConn, err = net.DialTCP("tcp", nil, masterAddress)
-		if err != nil {
-			elevio.SetMotorDirection(elevio.MD_Stop)
-			panic("Error connecting to new master:")
+	attempts := 5
+	for i := 0; i < attempts; i++ {
+		masterConn, err := net.DialTCP("tcp", nil, masterAddress)
+		if err == nil {
+			connCh <- masterConn
+			return
+		} else {
+			time.Sleep(50 * time.Millisecond)
 		}
+
 	}
+	connCh <- nil
+}
+
+func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package) {
 
 	allowedTypes := [...]reflect.Type{
 		reflect.TypeOf(mscomm.RequestState{}),
@@ -41,8 +46,6 @@ func StartUp(address string, senderCh <-chan interface{}, fromMasterCh chan<- ms
 
 	go mscomm.TCPSender(masterConn, senderCh)
 	go mscomm.TCPReader(masterConn, fromMasterCh, nil, allowedTypes[:]...)
-
-	return masterConn
 }
 
 func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer) {
@@ -58,6 +61,7 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 	case reflect.TypeOf(mscomm.RequestHallRequests{}):
 		select {
 		case senderCh <- hallRequests:
+			rblog.White.Println("Sending hallrequests")
 		case <-time.After(10 * time.Millisecond):
 			log.Println("Sending hallrequests timed out")
 		}
