@@ -27,7 +27,7 @@ type syncAttemptType struct {
 const (
 	applicationTimeout  time.Duration = 500 * time.Millisecond //Is a timeout actually needed?
 	syncTimeout         time.Duration = 500 * time.Millisecond
-	watchdogTimeout     time.Duration = 1 * time.Second
+	watchdogTimeout     time.Duration = 1000 * time.Millisecond
 	watchdogResetPeriod time.Duration = 300 * time.Millisecond
 	floorCount          int           = 4
 )
@@ -56,7 +56,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 	//TODO: log last action and print when watchdog triggers
 	watchdog := time.AfterFunc(watchdogTimeout, func() {
 		flog.Println("[ERROR] master deadlock")
-		panic("Vaktbikkje sier voff! - master deadlock?")
+		panic("Vaktbikkje sier voff!🐕‍🦺 - master deadlock?")
 	})
 	defer watchdog.Stop()
 
@@ -199,7 +199,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 			case mscomm.ElevatorState:
 				flog.Println("[INFO] received elevatorstate from", message.Addr)
 				elevState := message.Payload.(mscomm.ElevatorState)
-				if elevState.Floor < 0 {
+				if elevState.Floor < 0 || elevState.Behavior == "blocked" {
 					delete(communityState.States, message.Addr)
 				} else {
 					communityState.States[message.Addr] = elevState
@@ -221,7 +221,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 						flog.Println("[WARNING] Noone to assign to")
 						continue
 					}
-					//TODO: fix deadlock that occurs right about here
+					//TODO: fix deadlock that occurs right about here - when running assigner executable
 					flog.Println("[INFO] starting assigner executable")
 					assignedRequests, err := assigner.Assign(&communityState)
 					if err != nil {
@@ -234,6 +234,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 					for addr, requests := range *assignedRequests {
 						flog.Println("[INFO]", addr, "got assigned", requests)
 						slaves[addr].ch <- requests
+						//TODO: timeout if
 					}
 				}
 
