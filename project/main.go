@@ -15,8 +15,8 @@ func main() {
 	time.Sleep(100 * time.Millisecond) // To give elevatorserver time to boot
 
 	// Watchdog timer
-	watchdog := time.AfterFunc(WatchdogResetPeriod, func() {
-		rblog.Red.Println("[ERROR] main fr")
+	watchdog := time.AfterFunc(WatchdogTimeoutPeriod, func() {
+		rblog.Red.Println("[ERROR] main froze")
 		panic("Vaktbikkje sier voff! - main froze. Resets program.")
 	})
 
@@ -51,7 +51,7 @@ func main() {
 	lastRole := Slave
 	for {
 		select {
-		case mseData := <- fromMSEChannel:
+		case mseData := <-fromMSEChannel:
 			// Data recieved from Master Slave Election
 			elevatorRole = mseData.ElevatorRole
 			masterIP = mseData.MasterIP
@@ -76,7 +76,7 @@ func main() {
 		case <-time.After(WatchdogResetPeriod):
 			//unblock select to reset watchdog
 
-		watchdog.Reset(WatchdogResetPeriod)
 		}
+		watchdog.Reset(WatchdogTimeoutPeriod)
 	}
 }
