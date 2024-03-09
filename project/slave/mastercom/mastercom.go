@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"project/mscomm"
+	"project/rblog"
 	"project/slave/fsm"
 	"reflect"
 	"time"
@@ -60,6 +61,7 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 	case reflect.TypeOf(mscomm.RequestHallRequests{}):
 		select {
 		case senderCh <- hallRequests:
+			rblog.White.Println("Sending hallrequests")
 		case <-time.After(10 * time.Millisecond):
 			log.Println("Sending hallrequests timed out")
 		}

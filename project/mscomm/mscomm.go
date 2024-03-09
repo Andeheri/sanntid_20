@@ -152,7 +152,6 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 				}
 
 			}
-			rblog.Yellow.Println("Reader routine offline")
 			return
 		}
 
@@ -183,7 +182,6 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 	for {
 		data, isOpen := <-ch
 		if !isOpen {
-			rblog.Println("Channel closed")
 			return
 		}
 
