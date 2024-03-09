@@ -63,7 +63,7 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 
 	for {
 		localIP, err := LocalIP()
-		if err != nil {
+		if err == nil {
 			_, e := bcastConn.WriteTo([]byte(localIP), bcastAddr)
 			if e != nil {
 				rblog.Red.Printf("Error when broadcasting: %+v", e)
