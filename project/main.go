@@ -24,14 +24,14 @@ func main() {
 	time.Sleep(100 * time.Millisecond) // To give elevatorserver time to boot
 
 	// Channels
-	recieveUDPChannel := make(chan string)
-	toMSEChannel := make(chan scout.ToMSE)
-	fromMSEChannel := make(chan scout.FromMSE)
+	recieveUDPChannel    := make(chan string)
+	toMSEChannel         := make(chan scout.ToMSE)
+	fromMSEChannel       := make(chan scout.FromMSE)
 	masterAddressChannel := make(chan string)
-	masterQuitChannel := make(chan struct{})
+	masterQuitChannel    := make(chan struct{})
 
 	// Start all go-threads
-	go scout.ListenForInfo(recieveUDPChannel)
+	go scout.ListenUDP(recieveUDPChannel)
 	go scout.SendKeepAliveMessage(DeltaTKeepAlive)
 	go scout.TrackMissedKeepAliveMessagesAndMSE(DeltaTSamplingKeepAlive, NumKeepAlive, recieveUDPChannel, toMSEChannel)
 	go scout.MasterSlaveElection(fromMSEChannel, toMSEChannel)
