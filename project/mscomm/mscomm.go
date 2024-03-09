@@ -144,7 +144,6 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 				}
 
 			}
-			rblog.Yellow.Println("Reader routine offline")
 			return
 		}
 
