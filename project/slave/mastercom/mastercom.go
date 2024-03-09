@@ -33,7 +33,7 @@ func EstablishTCPConnection(address string, connCh chan<- *net.TCPConn) {
 	connCh <- nil
 }
 
-func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package) {
+func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package, masterDisconnect chan<- mscomm.ConnectionEvent) {
 
 	allowedTypes := [...]reflect.Type{
 		reflect.TypeOf(mscomm.RequestState{}),
@@ -44,7 +44,7 @@ func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh 
 	}
 
 	go mscomm.TCPSender(masterConn, senderCh)
-	go mscomm.TCPReader(masterConn, fromMasterCh, nil, allowedTypes[:]...)
+	go mscomm.TCPReader(masterConn, fromMasterCh, masterDisconnect, allowedTypes[:]...)
 }
 
 func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer) {

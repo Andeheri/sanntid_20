@@ -31,6 +31,7 @@ func Start(masterAddressCh <-chan string) {
 
 	senderCh := make(chan interface{})
 	fromMasterCh := make(chan mscomm.Package)
+	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
 
 	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
 
@@ -83,12 +84,14 @@ func Start(masterAddressCh <-chan string) {
 			}
 			if a != nil {
 				masterConn = a
-				close(senderCh)
-				senderCh = make(chan interface{})
-				mastercom.StartUp(masterConn, senderCh, fromMasterCh)
+				mastercom.StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh)
 			} else {
-				rblog.Red.Println("Connection to a new master failed")
+				rblog.Red.Println("Connection to a new master failed:", a)
 			}
+		
+		case <-masterDisconnectCh:
+			close(senderCh)
+			senderCh = make(chan interface{})
 
 		case a := <-fromMasterCh:
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer, inbetweenFloorsTimer)
