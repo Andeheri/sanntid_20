@@ -1,10 +1,10 @@
 package slave
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"project/mscomm"
+	"project/rblog"
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"project/slave/mastercom"
@@ -24,8 +24,8 @@ func Start(masterAddressCh <-chan string) {
 	go elevio.PollFloorSensor(drvFloorsCh)
 	go elevio.PollObstructionSwitch(drvObstrCh)
 
-	doorTimer := time.NewTimer(-1) 
-	                           
+	doorTimer := time.NewTimer(-1)
+
 	senderCh := make(chan interface{})
 	fromMasterCh := make(chan mscomm.Package)
 
@@ -34,21 +34,21 @@ func Start(masterAddressCh <-chan string) {
 	var masterConn *net.TCPConn
 	connCh := make(chan *net.TCPConn)
 
-	watchDogTime := 3*time.Second
+	watchDogTime := 3 * time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Watchdog timeout on slave")
 	})
 	defer watchDog.Stop()
 
-	fmt.Println("slave startet")
+	rblog.White.Println("slave startet")
 
 	for {
 		select {
 		case a := <-drvButtonsCh:
-			if a.Button == elevio.BT_Cab{
+			if a.Button == elevio.BT_Cab {
 				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, senderCh)
-			} else{
+			} else {
 				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
 				select {
 				case senderCh <- pressed:
@@ -61,7 +61,7 @@ func Start(masterAddressCh <-chan string) {
 			fsm.OnFloorArrival(a, doorTimer, senderCh)
 
 		case a := <-drvObstrCh:
-			fmt.Printf("Obstruction: %+v\n", a)
+			rblog.Yellow.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
 			//we want this?:
 			senderCh <- fsm.GetState()
@@ -70,26 +70,26 @@ func Start(masterAddressCh <-chan string) {
 			fsm.OnDoorTimeout(doorTimer, senderCh)
 
 		case a := <-masterAddressCh:
-			fmt.Println("mottat ny master addresse:", a)
+			rblog.White.Println("mottat ny master addresse:", a)
 			go mastercom.EstablishTCPConnection(a, connCh)
 
 		//TODO: fix panic if master connection not established in given time
-		case a:= <-connCh:
+		case a := <-connCh:
 			if masterConn != nil {
 				masterConn.Close()
 			}
 			if a != nil {
 				masterConn = a
 				mastercom.StartUp(masterConn, senderCh, fromMasterCh)
-			} else{
-				fmt.Println("Connection to a new master failed")
+			} else {
+				rblog.Red.Println("Connection to a new master failed")
 			}
-			
+
 		case a := <-fromMasterCh:
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer)
 
-		case <- time.After(watchDogTime/5):
-		}	
+		case <-time.After(watchDogTime / 5):
+		}
 
 		watchDog.Reset(watchDogTime)
 	}

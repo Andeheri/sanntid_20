@@ -1,10 +1,10 @@
 package mastercom
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"project/mscomm"
+	"project/rblog"
 	"project/slave/fsm"
 	"reflect"
 	"time"
@@ -16,7 +16,7 @@ func EstablishTCPConnection(address string, connCh chan<- *net.TCPConn) {
 
 	masterAddress, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
-		fmt.Println("Error resolving TCP address from master:", err)
+		rblog.Red.Println("Error resolving TCP address from master:", err)
 	}
 
 	attempts := 5
@@ -83,6 +83,6 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, senderCh)
 
 	default:
-		fmt.Println("received invalid type on fromMasterCh", payload)
+		rblog.Red.Println("Slave received invalid type on fromMasterCh", payload)
 	}
 }
