@@ -63,6 +63,8 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-drvObstrCh:
 			fmt.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
+			//we want this?:
+			senderCh <- fsm.GetState()
 
 		case <-doorTimer.C:
 			fsm.OnDoorTimeout(doorTimer, senderCh)
