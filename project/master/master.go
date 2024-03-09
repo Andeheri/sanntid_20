@@ -221,6 +221,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 						flog.Println("[WARNING] Noone to assign to")
 						continue
 					}
+					//TODO: fix deadlock that occurs right about here
 					flog.Println("[INFO] starting assigner executable")
 					assignedRequests, err := assigner.Assign(&communityState)
 					if err != nil {
