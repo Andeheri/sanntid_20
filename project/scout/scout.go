@@ -1,25 +1,24 @@
 package scout
 
 import (
-	"bytes"
+	"fmt"
+	"net"
 	. "project/constants"
 	"project/rblog"
 	"project/scout/conn"
-	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type FromMSE struct {
-	ElevatorRole  Role
-	MasterIP string
+	ElevatorRole        Role
+	MasterIP            string
 	CurrentIPAddressMap map[string]int
 }
 
 type ToMSE struct {
-	LocalIP string
+	LocalIP      string
 	IPAddressMap map[string]int
 }
 
@@ -27,7 +26,8 @@ var localIP string = LoopbackIp
 
 func LocalIP() (string, error) {
 	if localIP == LoopbackIp {
-		conn, err := net.DialTCP("tcp4", nil, &net.TCPAddr{IP: []byte{8, 8, 8, 8}, Port: 53})
+		dialer := net.Dialer{Timeout: 500 * time.Millisecond} // Timeout duration
+		conn, err := dialer.Dial("tcp4", "8.8.8.8:53")
 		if err != nil {
 			return LoopbackIp, err
 		}
@@ -37,88 +37,33 @@ func LocalIP() (string, error) {
 	return localIP, nil
 }
 
-var broadcastAddr *net.UDPAddr
-
-func getBroadcastAddr(localIP string, UDP_PORT int) *net.UDPAddr {
-	if broadcastAddr == nil {
-		interfaces, err := net.Interfaces()
-		if err != nil {
-			return nil
-		}
-
-		for _, iface := range interfaces {
-			addrs, err := iface.Addrs()
-			if err != nil {
-				continue
-			}
-			for _, addr := range addrs {
-				ipnet, ok := addr.(*net.IPNet)
-				if !ok {
-					continue
-				}
-				if ipnet.IP.String() == localIP {
-					// Check if this interface has a broadcast address
-					if iface.Flags&net.FlagBroadcast != 0 {
-						// Calculate the broadcast address
-						ip := ipnet.IP.To4()
-						if ip == nil {
-							continue // Not an ipv4 address
-						}
-						mask := net.IP(ipnet.Mask).To4()
-						broadcast := net.IP(make([]byte, 4))
-						for i := range ip {
-							broadcast[i] = ip[i] | ^mask[i]
-						}
-						broadcastAddr := broadcast.String()
-						addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", broadcastAddr, UDP_PORT))
-						return addr
-					}
-				}
-			}
-		}
-		return nil
-	} else {
-		return broadcastAddr
-	}
-}
-
-func ListenForInfo(recieve_broadcast_channel chan<- string) {
+func ListenUDP(recieve_broadcast_channel chan<- string) {
 	const bufSize = 1024
 
 	conn := conn.DialBroadcastUDP(UDPPort)
 	defer conn.Close()
 
+	buff := make([]byte, bufSize)
 	for {
-		buff := make([]byte, bufSize)
-		_, _, e := conn.ReadFrom(buff)
+		n, _, e := conn.ReadFrom(buff)
 		if e != nil {
 			rblog.Red.Printf("Error when recieving with UDP on port %d: \"%+v\"\n", UDPPort, e)
-		} else {
-			// Trim trailing \0
-			index := bytes.IndexByte(buff, 0)
-			if index == -1 {
-				// Handle error: null terminator not found
-				// Fallback option could be to use the whole buffer,
-				// but this could lead to incorrect behavior if the buffer is not cleaned properly
-				index = len(buff)
-			}
-
-			recieved_message := string(buff[:index])
-			recieve_broadcast_channel <- recieved_message
+			continue
 		}
+		recieved_message := string(buff[:n])
+		recieve_broadcast_channel <- recieved_message
 	}
 }
 
 func SendKeepAliveMessage(deltaT time.Duration) {
 	// Sends keep-alive messages, updating all elevators that it is active, and maybe trigger a reelection of master
 	bcastConn := conn.DialBroadcastUDP(UDPPort)
+	bcastAddr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", BroadcastAddr, UDPPort))
 	defer bcastConn.Close()
 
-	var bcastAddr *net.UDPAddr
 	for {
-		localIP, _ := LocalIP()
-		bcastAddr = getBroadcastAddr(localIP, UDPPort)
-		if bcastAddr != nil {
+		localIP, err := LocalIP()
+		if err == nil {
 			_, e := bcastConn.WriteTo([]byte(localIP), bcastAddr)
 			if e != nil {
 				rblog.Red.Printf("Error when broadcasting: %+v", e)
@@ -140,8 +85,8 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 			// Received keep alive message
 			aliveMap[IPAddr] = struct{}{}
 			_, exists := knownMap[IPAddr]
-			knownMap[IPAddr] = numKeepAlive
 			if !exists {
+				knownMap[IPAddr] = numKeepAlive
 				hasChanged = true
 			}
 		case <-timer.C:
@@ -176,31 +121,24 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 	}
 }
 
-func IPToNum(ipAddress string) int {
-	ip_as_string := strings.Join(strings.Split(ipAddress, "."), "")
-	ip_as_num, err := strconv.Atoi(ip_as_string)
-	if err != nil {
-		rblog.Red.Printf("Error when casting IP address to num.\n")
-	}
-	return ip_as_num
-}
-
 func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) {
 	var highestIPInt int = 0
 	var highestIPString string = "0.0.0.0"
-	lastHighestIP := ""
-	lastRole := Unknown
+	var lastMasterIP string = LoopbackIp
+	var lastRole Role = Unknown
 
 	for mseData := range updatedIPAddressCh {
 		localIP := mseData.LocalIP
 		IPAddressMap := mseData.IPAddressMap
-		rblog.Yellow.Printf("Current active IP's: %+v", IPAddressMap)
+		rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
+
 		role := Unknown
 		highestIPInt = 0
-		if len(IPAddressMap) <= 1 { // Elevator is disconnected
+		if len(IPAddressMap) <= 1 { // Elevator is disconnected or alone
+			rblog.Cyan.Println("--- Master Slave Election ---")
 			lastRole = Master
-			lastHighestIP = LoopbackIp // (Always smaller than a regular IP)
-			mseCh <- FromMSE{ElevatorRole: Master, MasterIP: LoopbackIp, CurrentIPAddressMap: IPAddressMap}
+			lastMasterIP = LoopbackIp // (Always smaller than a regular IP)
+			mseCh <- FromMSE{ElevatorRole: Master, MasterIP: lastMasterIP, CurrentIPAddressMap: IPAddressMap}
 			continue
 		}
 
@@ -212,20 +150,30 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 			}
 		}
 
-		if highestIPString != lastHighestIP {
+		if highestIPString != lastMasterIP {
+			rblog.Cyan.Println("--- Master Slave Election ---")
 			if highestIPString == localIP {
 				role = Master
 			} else {
 				role = Slave
 			}
 			// Check if a change in roles needs to take place
-			if lastRole != role || lastHighestIP != highestIPString {
+			if lastRole != role || lastMasterIP != highestIPString {
 				lastRole = role
-				lastHighestIP = highestIPString
+				lastMasterIP = highestIPString
 				mseCh <- FromMSE{ElevatorRole: role, MasterIP: highestIPString, CurrentIPAddressMap: IPAddressMap}
 			}
 		}
 	}
+}
+
+func IPToNum(ipAddress string) int {
+	ip_as_string := strings.Join(strings.Split(ipAddress, "."), "")
+	ip_as_num, err := strconv.Atoi(ip_as_string)
+	if err != nil {
+		rblog.Red.Printf("Error when casting IP address to num.\n")
+	}
+	return ip_as_num
 }
 
 func MakeDeepCopyMap[K comparable, V any](current_map map[K]V) map[K]V {

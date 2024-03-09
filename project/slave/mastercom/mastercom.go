@@ -1,8 +1,6 @@
 package mastercom
 
 import (
-	"fmt"
-	"log"
 	"net"
 	"project/mscomm"
 	"project/rblog"
@@ -17,7 +15,7 @@ func EstablishTCPConnection(address string, connCh chan<- *net.TCPConn) {
 
 	masterAddress, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
-		fmt.Println("Error resolving TCP address from master:", err)
+		rblog.Red.Println("Error resolving TCP address from master:", err)
 	}
 
 	attempts := 5
@@ -34,7 +32,7 @@ func EstablishTCPConnection(address string, connCh chan<- *net.TCPConn) {
 	connCh <- nil
 }
 
-func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package) {
+func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package, masterDisconnect chan<- mscomm.ConnectionEvent) {
 
 	allowedTypes := [...]reflect.Type{
 		reflect.TypeOf(mscomm.RequestState{}),
@@ -45,17 +43,17 @@ func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh 
 	}
 
 	go mscomm.TCPSender(masterConn, senderCh)
-	go mscomm.TCPReader(masterConn, fromMasterCh, nil, allowedTypes[:]...)
+	go mscomm.TCPReader(masterConn, fromMasterCh, masterDisconnect, allowedTypes[:]...)
 }
 
-func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer) {
+func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer) {
 
 	switch reflect.TypeOf(payload) {
 	case reflect.TypeOf(mscomm.RequestState{}):
 		select {
 		case senderCh <- fsm.GetState():
 		case <-time.After(10 * time.Millisecond):
-			log.Println("Sending state timed out")
+			rblog.Yellow.Println("Sending state timed out")
 		}
 
 	case reflect.TypeOf(mscomm.RequestHallRequests{}):
@@ -63,7 +61,7 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		case senderCh <- hallRequests:
 			rblog.White.Println("Sending hallrequests")
 		case <-time.After(10 * time.Millisecond):
-			log.Println("Sending hallrequests timed out")
+			rblog.Yellow.Println("Sending hallrequests timed out")
 		}
 
 	case reflect.TypeOf(mscomm.SyncRequests{}):
@@ -71,7 +69,7 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		select {
 		case senderCh <- mscomm.SyncOK{Id: payload.(mscomm.SyncRequests).Id}:
 		case <-time.After(10 * time.Millisecond):
-			log.Println("Sending SyncOK timed out")
+			rblog.Yellow.Println("Sending SyncOK timed out")
 		}
 
 	case reflect.TypeOf(mscomm.Lights{}):
@@ -82,9 +80,9 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 
 	case reflect.TypeOf(mscomm.AssignedRequests{}):
 		fsm.RequestsClearAll()
-		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, senderCh)
+		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, inbetweenFloorsTimer, senderCh)
 
 	default:
-		fmt.Println("received invalid type on fromMasterCh", payload)
+		rblog.Red.Println("Slave received invalid type on fromMasterCh", payload)
 	}
 }

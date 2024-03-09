@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"project/rblog"
 	"project/slave/iodevice"
 	"runtime"
 	"strconv"
@@ -15,9 +16,10 @@ var cabsBackup string = ""
 
 func Read() []int {
 	if cabsMain == "" {
+		// Get the path of the currently running executable
 		exeDir, err := getCurrentDirectory()
 		if err != nil {
-			fmt.Println("Error getting current directory:", err)
+			rblog.Red.Println("Error getting current directory:", err)
 			return nil
 		}
 		cabsMain = filepath.Join(exeDir, "cabsMain.txt")
@@ -25,12 +27,12 @@ func Read() []int {
 	}
 	// Read from primary file
 	fileData, err := os.ReadFile(cabsMain)
-	if err != nil || len(string(fileData)) != iodevice.N_FLOORS{
-		fmt.Println("Error reading from primary file:", err)
+	if err != nil || len(string(fileData)) != iodevice.N_FLOORS {
+		rblog.Red.Println("Error reading from primary file:", err)
 		// Try reading from backup file
 		fileData, err = os.ReadFile(cabsBackup)
-		if err != nil || len(string(fileData)) != iodevice.N_FLOORS{
-			fmt.Println("Error reading from backup file:", err)
+		if err != nil || len(string(fileData)) != iodevice.N_FLOORS {
+			rblog.Red.Println("Error reading from backup file:", err)
 			return nil
 		}
 	}
@@ -40,7 +42,7 @@ func Read() []int {
 	for i, char := range cabs {
 		val, err := strconv.Atoi(string(char))
 		if err != nil {
-			fmt.Println("Error converting string to int:", err)
+			rblog.Red.Println("Error converting string to int:", err)
 			return nil
 		}
 		result[i] = val
@@ -94,13 +96,13 @@ func Clear(floor int) error {
 }
 
 func getCurrentDirectory() (string, error) {
-    // Get the absolute path of the file containing this function
-    _, filename, _, ok := runtime.Caller(1)
-    if !ok {
-        return "", errors.New("unable to get current directory")
-    }
+	// Get the absolute path of the file containing this function
+	_, filename, _, ok := runtime.Caller(1)
+	if !ok {
+		return "", errors.New("unable to get current directory")
+	}
 
-    // Get the directory containing the file
-    packageDir := filepath.Dir(filename)
-    return packageDir, nil
+	// Get the directory containing the file
+	packageDir := filepath.Dir(filename)
+	return packageDir, nil
 }
