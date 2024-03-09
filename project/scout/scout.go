@@ -63,7 +63,7 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 
 	for {
 		localIP, err := LocalIP()
-		if err != nil {
+		if err == nil {
 			_, e := bcastConn.WriteTo([]byte(localIP), bcastAddr)
 			if e != nil {
 				rblog.Red.Printf("Error when broadcasting: %+v", e)
@@ -122,10 +122,10 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 }
 
 func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) {
-	var highestIPInt    int    = 0
+	var highestIPInt int = 0
 	var highestIPString string = "0.0.0.0"
-	var lastMasterIP    string = LoopbackIp
-	var lastRole        Role   = Unknown
+	var lastMasterIP string = LoopbackIp
+	var lastRole Role = Unknown
 
 	for mseData := range updatedIPAddressCh {
 		localIP := mseData.LocalIP
@@ -141,7 +141,7 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 			mseCh <- FromMSE{ElevatorRole: Master, MasterIP: lastMasterIP, CurrentIPAddressMap: IPAddressMap}
 			continue
 		}
-		
+
 		for ipAddress := range IPAddressMap {
 			ipAddressInt := IPToNum(ipAddress)
 			if ipAddressInt > highestIPInt {
@@ -149,24 +149,24 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 				highestIPInt = ipAddressInt
 			}
 		}
-		
+
 		if highestIPString != lastMasterIP {
 			rblog.Cyan.Println("--- Master Slave Election ---")
 			if highestIPString == localIP {
 				role = Master
-				} else {
-					role = Slave
-				}
-				// Check if a change in roles needs to take place
-				if lastRole != role || lastMasterIP != highestIPString {
-					lastRole = role
-					lastMasterIP = highestIPString
-					mseCh <- FromMSE{ElevatorRole: role, MasterIP: highestIPString, CurrentIPAddressMap: IPAddressMap}
-				}
+			} else {
+				role = Slave
+			}
+			// Check if a change in roles needs to take place
+			if lastRole != role || lastMasterIP != highestIPString {
+				lastRole = role
+				lastMasterIP = highestIPString
+				mseCh <- FromMSE{ElevatorRole: role, MasterIP: highestIPString, CurrentIPAddressMap: IPAddressMap}
 			}
 		}
 	}
-	
+}
+
 func IPToNum(ipAddress string) int {
 	ip_as_string := strings.Join(strings.Split(ipAddress, "."), "")
 	ip_as_num, err := strconv.Atoi(ip_as_string)
@@ -177,7 +177,7 @@ func IPToNum(ipAddress string) int {
 }
 
 func MakeDeepCopyMap[K comparable, V any](current_map map[K]V) map[K]V {
-		// Create deep copy
+	// Create deep copy
 	map_copy := make(map[K]V)
 	// Manually copy elements from the original map to the new map
 	for key, value := range current_map {

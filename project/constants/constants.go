@@ -22,4 +22,5 @@ const (
 	NumKeepAlive            int           = 5 // Number of missed keep-alive messages missed before assumed offline
 	DeltaTKeepAlive         time.Duration = 50 * time.Millisecond
 	DeltaTSamplingKeepAlive time.Duration = 100 * time.Millisecond
+	WatchdogResetPeriod     time.Duration = 1 * time.Second
 )
