@@ -32,6 +32,7 @@ func Start(masterAddressCh <-chan string) {
 	fsm.Init(doorTimer, senderCh)
 
 	var masterConn *net.TCPConn
+	connCh := make(chan *net.TCPConn)
 
 	watchDogTime := 3*time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
@@ -62,17 +63,28 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-drvObstrCh:
 			fmt.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
+			//we want this?:
+			senderCh <- fsm.GetState()
 
 		case <-doorTimer.C:
 			fsm.OnDoorTimeout(doorTimer, senderCh)
 
 		case a := <-masterAddressCh:
 			fmt.Println("mottat ny master addresse:", a)
+			go mastercom.EstablishTCPConnection(a, connCh)
+
+		//TODO: fix panic if master connection not established in given time
+		case a:= <-connCh:
 			if masterConn != nil {
 				masterConn.Close()
 			}
-			masterConn = mastercom.StartUp(a, senderCh, fromMasterCh)
-
+			if a != nil {
+				masterConn = a
+				mastercom.StartUp(masterConn, senderCh, fromMasterCh)
+			} else{
+				fmt.Println("Connection to a new master failed")
+			}
+			
 		case a := <-fromMasterCh:
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer)
 

@@ -22,8 +22,10 @@ func Init(doorTimer *time.Timer, clearRequestCh chan<- interface{}){
     Elev.Dirn = elevio.MD_Stop;
     Elev.Behaviour = elevator.EB_Idle;
 
+    floor := elevio.GetFloor()
+    Elev.Floor = floor
     // Code for fixing starting position between floors
-    if elevio.GetFloor() == -1 {
+    if floor == -1 {
         outputDevice.MotorDirection(elevio.MD_Down);
         Elev.Dirn = elevio.MD_Down;
         Elev.Behaviour = elevator.EB_Moving;
@@ -50,7 +52,6 @@ func SetAllLights(es *elevator.Elevator){
 
 
 func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequestCh chan<-interface{}){
-    fmt.Printf("\n(%d, %s)\n", btn_floor, iodevice.Elevio_button_toString(btn_type))
     Elev.Print()
     
     switch(Elev.Behaviour){

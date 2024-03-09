@@ -15,7 +15,6 @@ var cabsBackup string = ""
 
 func Read() []int {
 	if cabsMain == "" {
-		// Get the path of the currently running executable
 		exeDir, err := getCurrentDirectory()
 		if err != nil {
 			fmt.Println("Error getting current directory:", err)
@@ -79,7 +78,6 @@ func Set(floor int) error {
 	if err := writeToFiles(data); err != nil {
 		return err
 	}
-	// fmt.Println("Cabdata written successfully to files, (set).")
 	return nil
 }
 
@@ -92,7 +90,6 @@ func Clear(floor int) error {
 	if err := writeToFiles(data); err != nil {
 		return err
 	}
-	// fmt.Println("Cabdata written successfully to files, (cleared).")
 	return nil
 }
 
