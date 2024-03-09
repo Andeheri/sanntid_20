@@ -59,6 +59,7 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 	case reflect.TypeOf(mscomm.RequestHallRequests{}):
 		select {
 		case senderCh <- hallRequests:
+			rblog.White.Println("Sending hallrequests")
 		case <-time.After(10 * time.Millisecond):
 			rblog.Yellow.Println("Sending hallrequests timed out")
 		}

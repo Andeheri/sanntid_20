@@ -44,7 +44,7 @@ func Assign(state *CommunityState) (*map[string]mscomm.AssignedRequests, error) 
 
 	ret, err := exec.Command(assignerExecutable, "-i", string(jsonBytes)).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("assigner executable returned error: %v \n return value: %v", err, ret)
+		return nil, fmt.Errorf("assigner executable returned error: %v return value: %+v", err, string(ret))
 	}
 
 	output := new(map[string]mscomm.AssignedRequests)
