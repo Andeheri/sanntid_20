@@ -52,7 +52,6 @@ func SetAllLights(es *elevator.Elevator){
 
 
 func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, clearRequestCh chan<-interface{}){
-    fmt.Printf("\n(%d, %s)\n", btn_floor, iodevice.Elevio_button_toString(btn_type))
     Elev.Print()
     
     switch(Elev.Behaviour){
