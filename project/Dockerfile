@@ -1,8 +1,8 @@
-#build container with 
-#   docker build -t elevator .
+# build container with 
+# sudo docker build -t elevator .
 
-#run container with 
-#   docker run -it --rm elevator
+# run container with 
+# sudo docker run -it --rm elevator
 
 # To run with broadcast
 # sudo docker network create --driver bridge --subnet 192.168.0.0/24 --gateway 192.168.0.1 --opt "com.docker.network.bridge.enable_ip_masquerade"="true" --opt "com.docker.network.bridge.enable_icc"="true" --opt "com.docker.network.bridge.host_binding_ipv4"="0.0.0.0" mynetwork
