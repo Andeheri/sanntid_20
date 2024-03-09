@@ -39,8 +39,9 @@ type Elevator struct {
 	Config     Config
 }
 type Config struct {
-	ClearRequestVariant ClearRequestVariant
-	DoorOpenDuration_s  time.Duration
+	ClearRequestVariant     ClearRequestVariant
+	DoorOpenDuration_s      time.Duration
+	InbetweenFloorsDuration time.Duration
 }
 
 func (es *Elevator) Print() {
@@ -83,8 +84,9 @@ func Initialize() Elevator {
 		DoorTimer:  *time.NewTimer(-1),
 		Behaviour:  EB_Idle,
 		Config: Config{
-			ClearRequestVariant: CV_InDirn,
-			DoorOpenDuration_s:  3 * time.Second,
+			ClearRequestVariant:     CV_InDirn,
+			DoorOpenDuration_s:      3 * time.Second,
+			InbetweenFloorsDuration: 10 * time.Second,
 		},
 		HallLights: mscomm.Lights{{false, false}, {false, false}, {false, false}, {false, false}},
 	}

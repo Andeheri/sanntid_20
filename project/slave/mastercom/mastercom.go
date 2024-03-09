@@ -47,7 +47,7 @@ func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh 
 	go mscomm.TCPReader(masterConn, fromMasterCh, nil, allowedTypes[:]...)
 }
 
-func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer) {
+func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer) {
 
 	switch reflect.TypeOf(payload) {
 	case reflect.TypeOf(mscomm.RequestState{}):
@@ -80,7 +80,7 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 
 	case reflect.TypeOf(mscomm.AssignedRequests{}):
 		fsm.RequestsClearAll()
-		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, senderCh)
+		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, inbetweenFloorsTimer, senderCh)
 
 	default:
 		rblog.Red.Println("Slave received invalid type on fromMasterCh", payload)
