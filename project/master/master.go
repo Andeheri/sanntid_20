@@ -63,7 +63,9 @@ func Run(masterPort int, quitCh chan struct{}) {
 
 	applicationTimeoutCh = make(chan string)
 	syncTimeoutCh := make(chan int)
-	terminateCh := make(chan struct{})
+
+	terminateTimer := time.NewTimer(100 * time.Millisecond)
+	terminateTimer.Stop()
 
 	collectStateTimer = time.NewTimer(collectStateTimeout)
 	collectStateTimer.Stop()
@@ -137,12 +139,9 @@ func Run(masterPort int, quitCh chan struct{}) {
 				dismiss(addr)
 			}
 			//some delay to clear channels before terminating
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				terminateCh <- struct{}{}
-			}()
+			terminateTimer.Reset(100 * time.Millisecond)
 
-		case <-terminateCh:
+		case <-terminateTimer.C:
 			rblog.Magenta.Print("--- Terminating master ---")
 			flog.Println("[INFO] Terminating master")
 			return
