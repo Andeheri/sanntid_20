@@ -64,11 +64,8 @@ func Run(masterPort int, quitCh chan struct{}) {
 	applicationTimeoutCh = make(chan string)
 	syncTimeoutCh := make(chan int)
 	terminateCh := make(chan struct{})
-	collectStateTimeoutCh := make(chan struct{})
 
-	collectStateTimer = time.AfterFunc(collectStateTimeout, func() {
-		collectStateTimeoutCh <- struct{}{}
-	})
+	collectStateTimer = time.NewTimer(collectStateTimeout)
 	collectStateTimer.Stop()
 
 	fromSlaveCh := make(chan mscomm.Package)
@@ -124,7 +121,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				}
 				delete(syncAttempts, syncId)
 			}
-		case <-collectStateTimeoutCh: //TODO: Should use timer with channel???
+		case <-collectStateTimer.C:
 			for addr, slave := range slaves {
 				if slave.statePending {
 					rblog.Yellow.Println("slave did not respond to state request:", addr)
