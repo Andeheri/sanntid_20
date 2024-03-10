@@ -1,7 +1,6 @@
 package slave
 
 import (
-	"net"
 	"project/mscomm"
 	"project/rblog"
 	"project/slave/elevio"
@@ -25,17 +24,13 @@ func Start(masterAddressCh <-chan string) {
 
 	senderCh := make(chan interface{})
 	fromMasterCh := make(chan mscomm.Package)
-	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
+	go mastercom.ConnManager(masterAddressCh, senderCh, fromMasterCh)
 
 	doorTimer := time.NewTimer(-1)
 	inbetweenFloorsTimer := time.NewTimer(-1)
 	inbetweenFloorsTimer.Stop()
 
 	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
-
-	var currentMasterAddress string
-	var masterConn *net.TCPConn
-	connCh := make(chan *net.TCPConn)
 
 	watchDogTime := 3 * time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
@@ -51,7 +46,11 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-drvButtonsCh:
 			if a.Button == elevio.BT_Cab {
 				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
-				senderCh <- fsm.GetState()
+				select {
+				case senderCh <- fsm.GetState():
+				case <-time.After(10 * time.Millisecond):
+					rblog.Yellow.Println("Timed out on sending state after cab button press")
+				}
 			} else {
 				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
 				select {
@@ -67,7 +66,11 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-drvObstrCh:
 			rblog.Yellow.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
-			senderCh <- fsm.GetState()
+			select {
+			case senderCh <- fsm.GetState():
+			case <-time.After(10 * time.Millisecond):
+				rblog.Yellow.Println("Timed out on sending state after change in obstruction:", a)
+			}
 
 		case <-doorTimer.C:
 			fsm.OnDoorTimeout(doorTimer, inbetweenFloorsTimer, senderCh)
@@ -75,32 +78,10 @@ func Start(masterAddressCh <-chan string) {
 		case <-inbetweenFloorsTimer.C:
 			rblog.Red.Println("No floor arrival, setting Elev.Floor = -1")
 			fsm.Elev.Floor = -1
-			senderCh <- fsm.GetState()
-
-		case a := <-masterAddressCh:
-			if currentMasterAddress == a {
-				break
-			}
-			currentMasterAddress = a
-			rblog.White.Println("Received new master address:", a)
-			go mastercom.EstablishTCPConnection(currentMasterAddress, connCh)
-
-		//TODO: fix reonnect if master connection not established in given time
-		case a := <-connCh:
-			if masterConn != nil {
-				masterConn.Close()
-			}
-			if a != nil {
-				masterConn = a
-				mastercom.StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh)
-			} else {
-				rblog.Red.Println("Connection to a new master failed:", a)
-			}
-
-		case a := <-masterDisconnectCh:
-			if masterConn != nil && a.Addr == masterConn.RemoteAddr().String() {
-				close(senderCh)
-				senderCh = make(chan interface{})
+			select {
+			case senderCh <- fsm.GetState():
+			case <-time.After(10 * time.Millisecond):
+				rblog.Yellow.Println("Timed out on sending state after inbetweenFloorsTimer timeout")
 			}
 
 		case a := <-fromMasterCh:

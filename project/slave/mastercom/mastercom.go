@@ -11,25 +11,67 @@ import (
 
 var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
-func EstablishTCPConnection(address string, connCh chan<- *net.TCPConn) {
+func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromMasterCh chan<- mscomm.Package) {
+	var currentMasterAddress string
+	var masterTCPaddr *net.TCPAddr
+	var masterConn *net.TCPConn
+	var err error
+	var attempts int = 0
+	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
+	retry := time.NewTimer(-1)
+	retry.Stop()
 
-	masterAddress, err := net.ResolveTCPAddr("tcp", address)
-	if err != nil {
-		rblog.Red.Println("Error resolving TCP address from master:", err)
-	}
+	for {
+		select {
+			case newMasterAddress := <-masterAddressCh:
+				if newMasterAddress != currentMasterAddress {
+					rblog.White.Println("Master address changed to:", newMasterAddress)
+					currentMasterAddress = newMasterAddress
+					if masterConn != nil {
+						masterConn.Close()
+						//send something to close TCPSender
+						select {
+						case senderCh <- struct{}{}:
+						case <-time.After(10 * time.Millisecond):
+							rblog.Yellow.Println("Timed out on sending close of TCPSender")
+						}
+					}
+					masterTCPaddr, err = net.ResolveTCPAddr("tcp", currentMasterAddress)
+					if err != nil {
+						rblog.Red.Println("Error resolving TCP address from master:", err)
+					}
+					retry.Reset(0)
+				}
+			
+			case disconnect := <-masterDisconnectCh:
+				rblog.White.Println("Disconnected from master:", disconnect.Addr)
+				rblog.White.Println("Attempting reconnect",currentMasterAddress)
+				select {
+				case senderCh <- struct{}{}:
+				case <-time.After(10 * time.Millisecond):
+					rblog.Yellow.Println("Timed out on sending close of TCPSender")
+				}
+				if disconnect.Addr == currentMasterAddress {
+					rblog.Yellow.Println("Disconnected from master attempting reconnect")
+					retry.Reset(0)
+				}
 
-	attempts := 5
-	for i := 0; i < attempts; i++ {
-		masterConn, err := net.DialTCP("tcp", nil, masterAddress)
-		if err == nil {
-			connCh <- masterConn
-			return
-		} else {
-			time.Sleep(50 * time.Millisecond)
+			case <-retry.C:
+				rblog.White.Println("Attempting dialing to connect to master")
+				conn, err := net.DialTCP("tcp", nil, masterTCPaddr)
+				if err == nil {
+					masterConn = conn
+					StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh)
+					attempts = 0
+				} else {
+					retry.Reset(50 * time.Millisecond)
+					attempts += 1
+					if attempts > 20 {
+						panic("Failed to connect to master")
+					}
+				}
 		}
-
 	}
-	connCh <- nil
 }
 
 func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package, masterDisconnect chan<- mscomm.ConnectionEvent) {
@@ -86,28 +128,3 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		rblog.Red.Println("Slave received invalid type on fromMasterCh", payload)
 	}
 }
-
-
-// func HandleReconnect(masterAddressCh <-chan string, connCh chan<- *net.TCPConn, masterDisconnectCh <-chan mscomm.ConnectionEvent, senderCh chan<- interface{}){
-//     var currentMasterAddress string
-//     var prevMasterAddress string
-//     for {
-//         select {
-//         case a := <-masterAddressCh:
-//             currentMasterAddress = a
-//             rblog.White.Println("mottatt ny master addresse:", a)
-//             go EstablishTCPConnection(currentMasterAddress, connCh)
-//         case <-masterDisconnectCh:
-//             rblog.Red.Println("Master disconnected, inddsending new connection attempt")
-//             close(senderCh)
-//             senderCh = make(chan interface{})
-//             // If master disconnects, wait for some time before attempting reconnection
-//             time.Sleep(5 * time.Second)
-//             if currentMasterAddress == prevMasterAddress || prevMasterAddress == ""{
-//                 go EstablishTCPConnection(currentMasterAddress, connCh)
-//             } else {
-//                 prevMasterAddress = currentMasterAddress
-//             }
-//         }
-//     }
-// }
