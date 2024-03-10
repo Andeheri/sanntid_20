@@ -119,7 +119,9 @@ func Run(masterPort int, quitCh chan struct{}) {
 			if _, exists := syncAttempts[syncId]; exists {
 				rblog.Yellow.Println("sync attempt timed out")
 				flog.Println("[WARNING] sync attempt timed out", syncAttempts[syncId].pendingSlaves, "did not respond")
-				//TODO: fire pending slaves??
+				for addr := range syncAttempts[syncId].pendingSlaves {
+					dismiss(addr)
+				}
 				delete(syncAttempts, syncId)
 			}
 		case <-collectStateTimeoutCh:
