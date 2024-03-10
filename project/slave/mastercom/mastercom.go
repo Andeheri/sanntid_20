@@ -13,12 +13,13 @@ var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {fals
 
 func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromMasterCh chan<- mscomm.Package) {
 	var currentMasterAddress string
-	var masterTCPaddr *net.TCPAddr
 	var masterConn *net.TCPConn
-	var err error
 	var attempts int = 0
 	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
-	retry := time.NewTimer(-1)
+
+	var reconnectTime time.Duration = 50 * time.Millisecond
+
+	retry := time.NewTimer(reconnectTime)
 	retry.Stop()
 
 	for {
@@ -35,10 +36,6 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 						case <-time.After(10 * time.Millisecond):
 							rblog.Yellow.Println("Timed out on sending close of TCPSender")
 						}
-					}
-					masterTCPaddr, err = net.ResolveTCPAddr("tcp", currentMasterAddress)
-					if err != nil {
-						rblog.Red.Println("Error resolving TCP address from master:", err)
 					}
 					retry.Reset(0)
 				}
@@ -58,13 +55,14 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 
 			case <-retry.C:
 				rblog.White.Println("Attempting dialing to connect to master")
-				conn, err := net.DialTCP("tcp", nil, masterTCPaddr)
+				conn, err := net.DialTimeout("tcp4", currentMasterAddress, 100 * time.Millisecond)
 				if err == nil {
-					masterConn = conn
+					rblog.White.Println("Connected to master")
+					masterConn = conn.(*net.TCPConn)
 					StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh)
 					attempts = 0
 				} else {
-					retry.Reset(50 * time.Millisecond)
+					retry.Reset(reconnectTime)
 					attempts += 1
 					if attempts > 20 {
 						panic("Failed to connect to master")

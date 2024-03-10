@@ -26,6 +26,7 @@ func Start(masterAddressCh <-chan string) {
 	fromMasterCh := make(chan mscomm.Package)
 	go mastercom.ConnManager(masterAddressCh, senderCh, fromMasterCh)
 
+	//TODO: set to something other than -1
 	doorTimer := time.NewTimer(-1)
 	inbetweenFloorsTimer := time.NewTimer(-1)
 	inbetweenFloorsTimer.Stop()
