@@ -171,8 +171,8 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 
 }
 
-// Intended to run as a goroutine
-// Returns when conn is closed or ch is closed
+// Intended to run as a goroutine.
+// Returns when ch is closed. If persistAfterDisconnect is false, it will also return after sending to a channel if the connection is lost.
 func TCPSender(conn *net.TCPConn, ch <-chan interface{}, persistAfterDisconnect bool) {
 
 	defer conn.Close()
