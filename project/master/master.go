@@ -70,6 +70,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 	collectStateTimer = time.NewTimer(collectStateTimeout)
 	collectStateTimer.Stop()
 
+	//start listening for slaves
 	fromSlaveCh := make(chan mscomm.Package)
 	slaveConnEventCh := make(chan mscomm.ConnectionEvent)
 
@@ -99,7 +100,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 
 				slave.Ch <- mscomm.RequestHallRequests{}
 
-			} else {
+			} else { //Slave disconnected
 				flog.Println("[INFO] slave disconnected: ", slave.Addr)
 				rblog.Magenta.Println("slave disconnected: ", slave.Addr)
 				dismiss(slave.Addr)
@@ -122,6 +123,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 					dismiss(addr)
 				}
 				delete(syncAttempts, syncId)
+				shareLights() //Send lights to the slaves still connected
 			}
 		case <-collectStateTimer.C:
 			for addr, slave := range slaves {
@@ -270,12 +272,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 					//sync successful
 					flog.Println("[INFO] sync was successful")
 					communityState.HallRequests.Set(syncAttempts[syncId].button)
-					for addr, slave := range slaves {
-						if slave.hired {
-							flog.Println("[INFO] distributing lights to", addr)
-							slave.ch <- mscomm.Lights(communityState.HallRequests)
-						}
-					}
+					shareLights()
 					delete(syncAttempts, syncId)
 					collectStates()
 				}
@@ -292,6 +289,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 		watchdog.Reset(watchdogTimeout)
 	}
 }
+
 func dismiss(addr string) {
 	flog.Println("[INFO] Dismissing", addr)
 	if _, exists := slaves[addr]; exists {
@@ -309,6 +307,15 @@ func collectStates() {
 			flog.Println("[INFO] Requesting state from", addr)
 			slave.ch <- mscomm.RequestState{}
 			slave.statePending = true
+		}
+	}
+}
+
+func shareLights() {
+	for addr, slave := range slaves {
+		if slave.hired {
+			flog.Println("[INFO] distributing lights to", addr)
+			slave.ch <- mscomm.Lights(communityState.HallRequests)
 		}
 	}
 }
