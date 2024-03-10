@@ -124,7 +124,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				}
 				delete(syncAttempts, syncId)
 			}
-		case <-collectStateTimeoutCh:
+		case <-collectStateTimeoutCh: //TODO: Should use timer with channel???
 			for addr, slave := range slaves {
 				if slave.statePending {
 					rblog.Yellow.Println("slave did not respond to state request:", addr)

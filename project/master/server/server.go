@@ -44,7 +44,7 @@ func Acceptor(listener *net.TCPListener, fromSlaveCh chan mscomm.Package, connec
 		slaveAddr := slaveConn.RemoteAddr().String()
 
 		toSlaveCh := make(chan interface{})
-		go mscomm.TCPSender(slaveConn, toSlaveCh)
+		go mscomm.TCPSender(slaveConn, toSlaveCh, true)
 		go mscomm.TCPReader(slaveConn, fromSlaveCh, connectionEventCh, allowedTypes[:]...)
 
 		connectionEventCh <- mscomm.ConnectionEvent{

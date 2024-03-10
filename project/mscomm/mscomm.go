@@ -173,7 +173,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 
 // Intended to run as a goroutine
 // Returns when conn is closed or ch is closed
-func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
+func TCPSender(conn *net.TCPConn, ch <-chan interface{}, persistAfterDisconnect bool) {
 
 	defer conn.Close()
 
@@ -192,8 +192,11 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}) {
 		}
 
 		if err := encoder.Encode(ttj); err != nil {
+			//Probably disconnected
 			rblog.Red.Println(err)
-			return
+			if !persistAfterDisconnect {
+				return
+			}
 		}
 	}
 
