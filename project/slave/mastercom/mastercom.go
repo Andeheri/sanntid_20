@@ -86,3 +86,28 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 		rblog.Red.Println("Slave received invalid type on fromMasterCh", payload)
 	}
 }
+
+
+// func HandleReconnect(masterAddressCh <-chan string, connCh chan<- *net.TCPConn, masterDisconnectCh <-chan mscomm.ConnectionEvent, senderCh chan<- interface{}){
+//     var currentMasterAddress string
+//     var prevMasterAddress string
+//     for {
+//         select {
+//         case a := <-masterAddressCh:
+//             currentMasterAddress = a
+//             rblog.White.Println("mottatt ny master addresse:", a)
+//             go EstablishTCPConnection(currentMasterAddress, connCh)
+//         case <-masterDisconnectCh:
+//             rblog.Red.Println("Master disconnected, inddsending new connection attempt")
+//             close(senderCh)
+//             senderCh = make(chan interface{})
+//             // If master disconnects, wait for some time before attempting reconnection
+//             time.Sleep(5 * time.Second)
+//             if currentMasterAddress == prevMasterAddress || prevMasterAddress == ""{
+//                 go EstablishTCPConnection(currentMasterAddress, connCh)
+//             } else {
+//                 prevMasterAddress = currentMasterAddress
+//             }
+//         }
+//     }
+// }

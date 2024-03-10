@@ -23,16 +23,17 @@ func Start(masterAddressCh <-chan string) {
 	go elevio.PollFloorSensor(drvFloorsCh)
 	go elevio.PollObstructionSwitch(drvObstrCh)
 
-	doorTimer := time.NewTimer(-1)
-	inbetweenFloorsTimer := time.AfterFunc(-1, noArrival)
-	inbetweenFloorsTimer.Stop()
-
 	senderCh := make(chan interface{})
 	fromMasterCh := make(chan mscomm.Package)
 	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
 
+	doorTimer := time.NewTimer(-1)
+	inbetweenFloorsTimer := time.NewTimer(-1)
+	inbetweenFloorsTimer.Stop()
+
 	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
 
+	var currentMasterAddress string
 	var masterConn *net.TCPConn
 	connCh := make(chan *net.TCPConn)
 
@@ -50,6 +51,7 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-drvButtonsCh:
 			if a.Button == elevio.BT_Cab {
 				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
+				senderCh <- fsm.GetState()
 			} else {
 				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
 				select {
@@ -65,17 +67,25 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-drvObstrCh:
 			rblog.Yellow.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
-			//we want this?:
-			//senderCh <- fsm.GetState()
+			senderCh <- fsm.GetState()
 
 		case <-doorTimer.C:
 			fsm.OnDoorTimeout(doorTimer, inbetweenFloorsTimer, senderCh)
 
-		case a := <-masterAddressCh:
-			rblog.White.Println("mottatt ny master addresse:", a)
-			go mastercom.EstablishTCPConnection(a, connCh)
+		case <-inbetweenFloorsTimer.C:
+			rblog.Red.Println("No floor arrival, setting Elev.Floor = -1")
+			fsm.Elev.Floor = -1
+			senderCh <- fsm.GetState()
 
-		//TODO: fix panic if master connection not established in given time
+		case a := <-masterAddressCh:
+			if currentMasterAddress == a {
+				break
+			}
+			currentMasterAddress = a
+			rblog.White.Println("Received new master address:", a)
+			go mastercom.EstablishTCPConnection(currentMasterAddress, connCh)
+
+		//TODO: fix reonnect if master connection not established in given time
 		case a := <-connCh:
 			if masterConn != nil {
 				masterConn.Close()
@@ -87,9 +97,11 @@ func Start(masterAddressCh <-chan string) {
 				rblog.Red.Println("Connection to a new master failed:", a)
 			}
 
-		case <-masterDisconnectCh:
-			close(senderCh)
-			senderCh = make(chan interface{})
+		case a := <-masterDisconnectCh:
+			if masterConn != nil && a.Addr == masterConn.RemoteAddr().String() {
+				close(senderCh)
+				senderCh = make(chan interface{})
+			}
 
 		case a := <-fromMasterCh:
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer, inbetweenFloorsTimer)
@@ -99,9 +111,4 @@ func Start(masterAddressCh <-chan string) {
 
 		watchDog.Reset(watchDogTime)
 	}
-}
-
-func noArrival() {
-	rblog.Red.Println("No floor arrival, setting Elev.Floor = -1")
-	fsm.Elev.Floor = -1
 }
