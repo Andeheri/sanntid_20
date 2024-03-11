@@ -16,6 +16,7 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 	var masterConn *net.TCPConn
 	var attempts int = 0
 	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
+	senderQuitCh := make(chan struct{})
 
 	var reconnectTime time.Duration = 50 * time.Millisecond
 
@@ -24,55 +25,49 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 
 	for {
 		select {
-			case newMasterAddress := <-masterAddressCh:
-				if newMasterAddress != currentMasterAddress {
-					rblog.White.Println("Master address changed to:", newMasterAddress)
-					currentMasterAddress = newMasterAddress
-					if masterConn != nil {
-						masterConn.Close()
-						//send something to close TCPSender
-						select {
-						case senderCh <- struct{}{}:
-						case <-time.After(10 * time.Millisecond):
-							rblog.Yellow.Println("Timed out on sending close of TCPSender")
-						}
-					}
-					retry.Reset(0)
+		case newMasterAddress := <-masterAddressCh:
+			if newMasterAddress != currentMasterAddress {
+				rblog.White.Println("Master address changed to:", newMasterAddress)
+				currentMasterAddress = newMasterAddress
+				if masterConn != nil {
+					masterConn.Close()
 				}
-			
-			case disconnect := <-masterDisconnectCh:
-				rblog.White.Println("Disconnected from master:", disconnect.Addr)
-				rblog.White.Println("Attempting reconnect",currentMasterAddress)
+				retry.Reset(0)
+			}
+
+		case disconnect := <-masterDisconnectCh:
+			rblog.White.Println("Disconnected from master:", disconnect.Addr)
+			rblog.White.Println("Attempting reconnect", currentMasterAddress)
+			if disconnect.Addr == currentMasterAddress {
+				rblog.Yellow.Println("Disconnected from master attempting reconnect")
+				retry.Reset(0)
+			}
+
+		case <-retry.C:
+			rblog.White.Println("Attempting dialing to connect to master")
+			conn, err := net.DialTimeout("tcp4", currentMasterAddress, 100*time.Millisecond)
+			if err == nil {
+				rblog.White.Println("Connected to master")
 				select {
-				case senderCh <- struct{}{}:
 				case <-time.After(10 * time.Millisecond):
 					rblog.Yellow.Println("Timed out on sending close of TCPSender")
+				case senderQuitCh <- struct{}{}: //Quitting the old sender
 				}
-				if disconnect.Addr == currentMasterAddress {
-					rblog.Yellow.Println("Disconnected from master attempting reconnect")
-					retry.Reset(0)
+				masterConn = conn.(*net.TCPConn)
+				StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh, senderQuitCh)
+				attempts = 0
+			} else {
+				retry.Reset(reconnectTime)
+				attempts += 1
+				if attempts > 20 {
+					panic("Failed to connect to master")
 				}
-
-			case <-retry.C:
-				rblog.White.Println("Attempting dialing to connect to master")
-				conn, err := net.DialTimeout("tcp4", currentMasterAddress, 100 * time.Millisecond)
-				if err == nil {
-					rblog.White.Println("Connected to master")
-					masterConn = conn.(*net.TCPConn)
-					StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh)
-					attempts = 0
-				} else {
-					retry.Reset(reconnectTime)
-					attempts += 1
-					if attempts > 20 {
-						panic("Failed to connect to master")
-					}
-				}
+			}
 		}
 	}
 }
 
-func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package, masterDisconnect chan<- mscomm.ConnectionEvent) {
+func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package, masterDisconnect chan<- mscomm.ConnectionEvent, senderQuitCh chan struct{}) {
 
 	allowedTypes := [...]reflect.Type{
 		reflect.TypeOf(mscomm.RequestState{}),
@@ -82,7 +77,7 @@ func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh 
 		reflect.TypeOf(mscomm.AssignedRequests{}),
 	}
 
-	go mscomm.TCPSender(masterConn, senderCh)
+	go mscomm.TCPSender(masterConn, senderCh, senderQuitCh)
 	go mscomm.TCPReader(masterConn, fromMasterCh, masterDisconnect, allowedTypes[:]...)
 }
 
