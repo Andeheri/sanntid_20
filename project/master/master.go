@@ -89,7 +89,6 @@ func Run(masterPort int, quitCh chan struct{}) {
 		case slave := <-slaveConnEventCh:
 			if slave.Connected {
 				flog.Println("[INFO] slave connected: ", slave.Addr)
-				rblog.Magenta.Println("slave connected: ", slave.Addr)
 				slaves[slave.Addr] = &slaveType{
 					ch:     slave.Ch,
 					quitCh: slave.QuitCh,
@@ -103,8 +102,12 @@ func Run(masterPort int, quitCh chan struct{}) {
 				slave.Ch <- mscomm.RequestHallRequests{}
 
 			} else { //Slave disconnected
+				if _, exists := slaves[slave.Addr]; exists{
+					rblog.Magenta.Println("slave resigned:", slave.Addr)
+				}else{
+					rblog.Magenta.Println("slave dismissed:", slave.Addr)
+				}
 				flog.Println("[INFO] slave disconnected: ", slave.Addr)
-				rblog.Magenta.Println("slave disconnected: ", slave.Addr)
 				dismiss(slave.Addr)
 				collectStates()
 			}
@@ -119,10 +122,12 @@ func Run(masterPort int, quitCh chan struct{}) {
 			}
 		case syncId := <-syncTimeoutCh:
 			if _, exists := syncAttempts[syncId]; exists {
-				rblog.Yellow.Println("sync attempt timed out")
 				flog.Println("[WARNING] sync attempt timed out", syncAttempts[syncId].pendingSlaves, "did not respond")
 				for addr := range syncAttempts[syncId].pendingSlaves {
-					dismiss(addr)
+					if _, stillThere := slaves[addr]; stillThere{
+						dismiss(addr)
+						rblog.Yellow.Println("slave did not acknowledge sync attempt:", addr)
+					}
 				}
 				delete(syncAttempts, syncId)
 				shareLights() //Send lights to the slaves still connected
