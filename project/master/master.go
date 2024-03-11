@@ -15,6 +15,7 @@ import (
 
 type slaveType struct {
 	ch           chan interface{}
+	quitCh       chan struct{}
 	hired        bool
 	statePending bool
 }
@@ -90,7 +91,8 @@ func Run(masterPort int, quitCh chan struct{}) {
 				flog.Println("[INFO] slave connected: ", slave.Addr)
 				rblog.Magenta.Println("slave connected: ", slave.Addr)
 				slaves[slave.Addr] = &slaveType{
-					ch: slave.Ch,
+					ch:     slave.Ch,
+					quitCh: slave.QuitCh,
 				}
 
 				go func() {
@@ -293,7 +295,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 func dismiss(addr string) {
 	flog.Println("[INFO] Dismissing", addr)
 	if _, exists := slaves[addr]; exists {
-		close(slaves[addr].ch)
+		slaves[addr].quitCh <- struct{}{}
 		delete(slaves, addr)
 	}
 	delete(communityState.States, addr)

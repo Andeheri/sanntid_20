@@ -127,6 +127,7 @@ type ConnectionEvent struct {
 	Connected bool
 	Addr      string
 	Ch        chan interface{}
+	QuitCh    chan struct{}
 }
 
 // Intended to run as a goroutine
@@ -172,32 +173,31 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 }
 
 // Intended to run as a goroutine.
-// Returns when ch is closed. If persistAfterDisconnect is false, it will also return after sending to a channel if the connection is lost.
-func TCPSender(conn *net.TCPConn, ch <-chan interface{}, persistAfterDisconnect bool) {
+// Returns only when sending something on quitCh.
+func TCPSender(conn *net.TCPConn, ch <-chan interface{}, quitCh <-chan struct{}) {
 
 	defer conn.Close()
 
 	encoder := json.NewEncoder(conn)
 
 	for {
-		data, isOpen := <-ch
-		if !isOpen {
+
+		select {
+		case data := <-ch:
+			ttj, err := NewTypeTaggedJSON(data)
+			if err != nil {
+				rblog.Red.Println(err)
+				continue
+			}
+
+			if err := encoder.Encode(ttj); err != nil {
+				//Probably disconnected
+				rblog.Red.Println(err)
+			}
+		case <-quitCh:
 			return
 		}
 
-		ttj, err := NewTypeTaggedJSON(data)
-		if err != nil {
-			rblog.Red.Println(err)
-			continue
-		}
-
-		if err := encoder.Encode(ttj); err != nil {
-			//Probably disconnected
-			rblog.Red.Println(err)
-			if !persistAfterDisconnect {
-				return
-			}
-		}
 	}
 
 }
