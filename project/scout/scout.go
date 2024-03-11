@@ -14,7 +14,6 @@ import (
 type FromMSE struct {
 	ElevatorRole        Role
 	MasterIP            string
-	CurrentIPAddressMap map[string]int
 }
 
 type ToMSE struct {
@@ -83,7 +82,7 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 	localIP, err := LocalIP()
 	if err != nil {
 		rblog.Red.Println("Error when getting local IP. Probably disconnected.")
-		MasterSlaveElection(fromMSEChannel, map[string]int{LoopbackIp: NumKeepAlive})
+		masterSlaveElection(fromMSEChannel, map[string]int{LoopbackIp: NumKeepAlive})
 	} else {
 		rblog.Green.Printf("Local IP: %s", localIP)
 	}
@@ -109,7 +108,7 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 			}
 			// Check if master-slave-configuration needs to be updated
 			if hasChanged {
-				MasterSlaveElection(fromMSEChannel, knownIPMap)
+				masterSlaveElection(fromMSEChannel, knownIPMap)
 			}
 			hasChanged = false
 		}
@@ -118,7 +117,7 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 
 var lastMasterIP string
 
-func MasterSlaveElection(mseCh chan<- FromMSE, IPAddressMap map[string]int) {
+func masterSlaveElection(mseCh chan<- FromMSE, IPAddressMap map[string]int) {
 	rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
 
 	role := Slave
@@ -126,13 +125,13 @@ func MasterSlaveElection(mseCh chan<- FromMSE, IPAddressMap map[string]int) {
 
 	if masterIP != lastMasterIP {
 		rblog.Cyan.Println("--- Master Slave Election ---")
-		if masterIP == localIP {
+		if masterIP == LoopbackIp {
 			role = Master
 		} else {
 			role = Slave
 		}
 		lastMasterIP = masterIP
-		mseCh <- FromMSE{ElevatorRole: role, MasterIP: masterIP, CurrentIPAddressMap: IPAddressMap}
+		mseCh <- FromMSE{ElevatorRole: role, MasterIP: masterIP}
 	}
 }
 

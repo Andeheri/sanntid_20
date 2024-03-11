@@ -44,7 +44,6 @@ func main() {
 			// Data recieved from Master Slave Election
 			elevatorRole = mseData.ElevatorRole
 			masterIP = mseData.MasterIP
-			_ = mseData.CurrentIPAddressMap
 			rblog.Cyan.Printf("Elevator role: %s | Master IP: %s", elevatorRole, masterIP)
 
 			if elevatorRole == Master && lastRole == Slave {
