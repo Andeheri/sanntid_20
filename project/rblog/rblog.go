@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 )
 
 type color string
@@ -45,12 +46,14 @@ func Println(v ...any) {
 }
 
 func (c *color) Print(v ...any) {
-	out := string(*c) + fmt.Sprint(v...) + reset
+	s := fmt.Sprint(v...)
+	out := string(*c) + strings.TrimSuffix(s, "\n") + reset
 	std.Output(2, out)
 }
 
 func (c *color) Printf(format string, v ...any) {
-	out := string(*c) + fmt.Sprintf(format, v...) + reset
+	s := fmt.Sprintf(format, v...)
+	out := string(*c) + strings.TrimSuffix(s, "\n") + reset
 	std.Output(2, out)
 }
 
@@ -81,8 +84,6 @@ func rainbowify(s string) string {
 	}
 	// Remove the newline at the end of string to avoid double newlines
 	// Newline will be added back by std.Output
-	if result[len(result)-1] == '\n' {
-		result = result[:len(result)-1]
-	}
-	return result + reset
+
+	return strings.TrimSuffix(result, "\n") + reset
 }
