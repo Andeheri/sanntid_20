@@ -1,57 +1,37 @@
 package slave
 
 import (
-	"fmt"
-	"net"
 	"project/mscomm"
+	"project/rblog"
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"project/slave/mastercom"
 	"time"
 )
 
-func Start(initialMasterAddress string, masterAddress <-chan string) {
+func Start(masterAddressCh <-chan string) {
 	numFloors := 4
 
 	elevio.Init("localhost:15657", numFloors)
 
-	drvButtons := make(chan elevio.ButtonEvent)
-	drvFloors := make(chan int)
-	drvObstr := make(chan bool)
+	drvButtonsCh := make(chan elevio.ButtonEvent)
+	drvFloorsCh := make(chan int)
+	drvObstrCh := make(chan bool)
 
-	go elevio.PollButtons(drvButtons)
-	go elevio.PollFloorSensor(drvFloors)
-	go elevio.PollObstructionSwitch(drvObstr)
+	go elevio.PollButtons(drvButtonsCh)
+	go elevio.PollFloorSensor(drvFloorsCh)
+	go elevio.PollObstructionSwitch(drvObstrCh)
 
+	senderCh := make(chan interface{})
+	fromMasterCh := make(chan mscomm.Package)
+	go mastercom.ConnManager(masterAddressCh, senderCh, fromMasterCh)
+
+	//TODO: set to something other than -1
 	doorTimer := time.NewTimer(-1)
+	inbetweenFloorsTimer := time.NewTimer(-1)
+	inbetweenFloorsTimer.Stop()
 
-	buttonPress := make(chan elevio.ButtonEvent, 2)
-	clearRequest := make(chan elevio.ButtonEvent, 2)
-	assignedRequests := make(chan mscomm.AssignedRequests, 2)
-	requestedState := make(chan struct{}, 2)
-	sender := make(chan interface{}, 2)
-	hallLights := make(chan mscomm.Lights, 2)
-	state := make(chan mscomm.ElevatorState, 2)
-
-	masterChans := mastercom.MasterChannels{
-		ButtonPress:      buttonPress,
-		ClearRequest:     clearRequest,
-		AssignedRequests: assignedRequests,
-		RequestedState:   requestedState,
-		Sender:           sender,
-		HallLights:       hallLights,
-		State:            state,
-	}
-
-	fsm.Init(doorTimer, masterChans.ClearRequest)
-
-	stopMaster := make(chan struct{})
-	TCPAddr, err := net.ResolveTCPAddr("tcp", initialMasterAddress)
-	if err != nil {
-		fmt.Println("Error resolving TCP address from master:", err)
-	}
-
-	go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
+	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
 
 	watchDogTime := 3 * time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
@@ -60,56 +40,57 @@ func Start(initialMasterAddress string, masterAddress <-chan string) {
 	})
 	defer watchDog.Stop()
 
+	rblog.White.Println("slave startet")
+
 	for {
 		select {
-		case a := <-drvButtons:
-			fmt.Printf("%+v\n", a)
+		case a := <-drvButtonsCh:
 			if a.Button == elevio.BT_Cab {
-				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, masterChans.ClearRequest)
+				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
+				select {
+				case senderCh <- fsm.GetState():
+				case <-time.After(10 * time.Millisecond):
+					rblog.Yellow.Println("Timed out on sending state after cab button press")
+				}
 			} else {
-				masterChans.ButtonPress <- a
+				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
+				select {
+				case senderCh <- pressed:
+				case <-time.After(10 * time.Millisecond):
+					rblog.Yellow.Println("Timed out on sending button press")
+				}
 			}
 
-		case a := <-drvFloors:
-			fmt.Printf("%+v\n", a)
-			fsm.OnFloorArrival(a, doorTimer, masterChans.ClearRequest)
+		case a := <-drvFloorsCh:
+			fsm.OnFloorArrival(a, doorTimer, inbetweenFloorsTimer, senderCh)
 
-		case a := <-drvObstr:
-			fmt.Printf("%+v\n", a)
+		case a := <-drvObstrCh:
+			rblog.Yellow.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
-
-		case a := <-doorTimer.C:
-			fmt.Printf("%+v\n", a)
-			fsm.OnDoorTimeout(doorTimer, masterChans.ClearRequest)
-
-		case a := <-masterAddress:
-			stopMaster <- struct{}{}
-			fmt.Println("mottat master addresse:", a)
-			TCPAddr, err := net.ResolveTCPAddr("tcp", a)
-			if err != nil {
-				fmt.Println("Error resolving TCP address from master:", err)
+			select {
+			case senderCh <- fsm.GetState():
+			case <-time.After(10 * time.Millisecond):
+				rblog.Yellow.Println("Timed out on sending state after change in obstruction:", a)
 			}
-			sender = make(chan interface{})
-			masterChans.Sender = sender
-			go mastercom.MasterCommunication(TCPAddr, &masterChans, stopMaster)
 
-		//moved these from mastercom.go as they are involved with current state
-		case a := <-masterChans.AssignedRequests:
-			fmt.Println(a, "mottat master request melding")
-			fsm.RequestsClearAll()
-			fsm.RequestsSetAll(a, doorTimer, masterChans.ClearRequest)
+		case <-doorTimer.C:
+			fsm.OnDoorTimeout(doorTimer, inbetweenFloorsTimer, senderCh)
 
-		case a := <-masterChans.RequestedState:
-			fmt.Println(a, "sender state til master")
-			masterChans.State <- fsm.GetState()
+		case <-inbetweenFloorsTimer.C:
+			rblog.Red.Println("No floor arrival, setting Elev.Floor = -1")
+			fsm.Elev.Floor = -1
+			select {
+			case senderCh <- fsm.GetState():
+			case <-time.After(10 * time.Millisecond):
+				rblog.Yellow.Println("Timed out on sending state after inbetweenFloorsTimer timeout")
+			}
 
-		case a := <-masterChans.HallLights:
-			fmt.Println(a, "mottat hall lights melding")
-			fsm.Elev.HallLights = a
-			fsm.SetAllLights(&fsm.Elev)
+		case a := <-fromMasterCh:
+			mastercom.HandleMessage(a.Payload, senderCh, doorTimer, inbetweenFloorsTimer)
 
-		case <-time.After(watchDogTime / 10):
+		case <-time.After(watchDogTime / 5):
 		}
+
 		watchDog.Reset(watchDogTime)
 	}
 }

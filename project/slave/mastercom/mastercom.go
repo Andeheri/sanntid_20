@@ -1,44 +1,73 @@
 package mastercom
 
 import (
-	"fmt"
 	"net"
 	"project/mscomm"
-	"project/slave/elevio"
+	"project/rblog"
+	"project/slave/fsm"
 	"reflect"
 	"time"
 )
 
-type MasterChannels struct {
-	ButtonPress  chan elevio.ButtonEvent
-	ClearRequest chan elevio.ButtonEvent
-
-	AssignedRequests chan mscomm.AssignedRequests
-	HallLights       chan mscomm.Lights
-	RequestedState   chan struct{}
-
-	State chan mscomm.ElevatorState
-
-	Sender chan interface{}
-}
-
 var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
-func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stopch <-chan struct{}) {
+func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromMasterCh chan<- mscomm.Package) {
+	var currentMasterAddress string
+	var masterConn *net.TCPConn
+	var attempts int = 0
+	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
+	senderQuitCh := make(chan struct{})
 
-	masterConn, err := net.DialTCP("tcp", nil, masterAddress)
-	if err != nil {
-		fmt.Println("Error connecting to new master:", err)
-		time.Sleep(10 * time.Millisecond)
-		masterConn, err = net.DialTCP("tcp", nil, masterAddress)
-		if err != nil {
-			// elevio.SetMotorDirection(elevio.MD_Stop)
-			panic("Error connecting to new master")
+	var reconnectTime time.Duration = 50 * time.Millisecond
+
+	retry := time.NewTimer(reconnectTime)
+	retry.Stop()
+
+	for {
+		select {
+		case newMasterAddress := <-masterAddressCh:
+			if newMasterAddress != currentMasterAddress {
+				rblog.White.Println("Master address changed to:", newMasterAddress)
+				currentMasterAddress = newMasterAddress
+				if masterConn != nil {
+					masterConn.Close()
+				}
+				retry.Reset(0)
+			}
+
+		case disconnect := <-masterDisconnectCh:
+			rblog.White.Println("Disconnected from master:", disconnect.Addr)
+			rblog.White.Println("Attempting reconnect", currentMasterAddress)
+			if disconnect.Addr == currentMasterAddress {
+				rblog.Yellow.Println("Disconnected from master attempting reconnect")
+				retry.Reset(0)
+			}
+
+		case <-retry.C:
+			rblog.White.Println("Attempting dialing to connect to master")
+			conn, err := net.DialTimeout("tcp4", currentMasterAddress, 100*time.Millisecond)
+			if err == nil {
+				rblog.White.Println("Connected to master")
+				select {
+				case <-time.After(10 * time.Millisecond):
+					rblog.Yellow.Println("Timed out on sending close of TCPSender")
+				case senderQuitCh <- struct{}{}: //Quitting the old sender
+				}
+				masterConn = conn.(*net.TCPConn)
+				StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh, senderQuitCh)
+				attempts = 0
+			} else {
+				retry.Reset(reconnectTime)
+				attempts += 1
+				if attempts > 20 {
+					panic("Failed to connect to master")
+				}
+			}
 		}
 	}
-	defer func() {
-		masterConn.Close()
-	}()
+}
+
+func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package, masterDisconnect chan<- mscomm.ConnectionEvent, senderQuitCh chan struct{}) {
 
 	allowedTypes := [...]reflect.Type{
 		reflect.TypeOf(mscomm.RequestState{}),
@@ -48,69 +77,47 @@ func MasterCommunication(masterAddress *net.TCPAddr, chans *MasterChannels, stop
 		reflect.TypeOf(mscomm.AssignedRequests{}),
 	}
 
-	fromMasterCh := make(chan mscomm.Package)
+	go mscomm.TCPSender(masterConn, senderCh, senderQuitCh)
+	go mscomm.TCPReader(masterConn, fromMasterCh, masterDisconnect, allowedTypes[:]...)
+}
 
-	go mscomm.TCPSender(masterConn, chans.Sender)
-	go mscomm.TCPReader(masterConn, fromMasterCh, nil, allowedTypes[:]...)
+func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer) {
 
-	for {
+	switch reflect.TypeOf(payload) {
+	case reflect.TypeOf(mscomm.RequestState{}):
 		select {
-		case a := <-chans.ButtonPress:
-			fmt.Println(a, "sender button press melding")
-			pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
-			select {
-			case chans.Sender <- pressed:
-			case <-time.After(10 * time.Millisecond):
-			}
-
-		case a := <-chans.ClearRequest:
-			fmt.Println(a, "sender clear request melding")
-			completedOrder := mscomm.OrderComplete{Floor: a.Floor, Button: int(a.Button)}
-			select {
-			case chans.Sender <- completedOrder:
-			case <-time.After(10 * time.Millisecond):
-			}
-
-		case a := <-chans.State:
-			fmt.Println("Sending state message to master")
-			select {
-			case chans.Sender <- a:
-			case <-time.After(10 * time.Millisecond):
-			}
-
-		case a := <-fromMasterCh:
-			switch reflect.TypeOf(a.Payload) {
-			case reflect.TypeOf(mscomm.RequestState{}):
-				fmt.Println("State requested by master")
-				chans.RequestedState <- struct{}{}
-			case reflect.TypeOf(mscomm.RequestHallRequests{}):
-				fmt.Println("Master requested Hallrequests")
-				select {
-				case chans.Sender <- hallRequests:
-				case <-time.After(10 * time.Millisecond):
-				}
-			case reflect.TypeOf(mscomm.SyncRequests{}):
-				fmt.Println("Received Syncrequests")
-				hallRequests = a.Payload.(mscomm.SyncRequests).Requests
-				select {
-				case chans.Sender <- mscomm.SyncOK{Id: a.Payload.(mscomm.SyncRequests).Id}:
-				case <-time.After(10 * time.Millisecond):
-				}
-			case reflect.TypeOf(mscomm.Lights{}):
-				fmt.Println("Received halllights")
-				chans.HallLights <- a.Payload.(mscomm.Lights)
-				//should also set hallrequests as lights are higher rank
-				hallRequests = mscomm.HallRequests(a.Payload.(mscomm.Lights))
-			case reflect.TypeOf(mscomm.AssignedRequests{}):
-				fmt.Println("Received assigned requests")
-				chans.AssignedRequests <- a.Payload.(mscomm.AssignedRequests)
-			default:
-				fmt.Println("received invalid type on fromMasterCh", a)
-				continue
-			}
-		case <-stopch:
-			close(chans.Sender)
-			return
+		case senderCh <- fsm.GetState():
+		case <-time.After(10 * time.Millisecond):
+			rblog.Yellow.Println("Sending state timed out")
 		}
+
+	case reflect.TypeOf(mscomm.RequestHallRequests{}):
+		select {
+		case senderCh <- hallRequests:
+			rblog.White.Println("Sending hallrequests")
+		case <-time.After(10 * time.Millisecond):
+			rblog.Yellow.Println("Sending hallrequests timed out")
+		}
+
+	case reflect.TypeOf(mscomm.SyncRequests{}):
+		hallRequests = payload.(mscomm.SyncRequests).Requests
+		select {
+		case senderCh <- mscomm.SyncOK{Id: payload.(mscomm.SyncRequests).Id}:
+		case <-time.After(10 * time.Millisecond):
+			rblog.Yellow.Println("Sending SyncOK timed out")
+		}
+
+	case reflect.TypeOf(mscomm.Lights{}):
+		fsm.Elev.HallLights = payload.(mscomm.Lights)
+		fsm.SetAllLights(&fsm.Elev)
+		//should also set hallrequests as lights are higher rank
+		hallRequests = mscomm.HallRequests(payload.(mscomm.Lights))
+
+	case reflect.TypeOf(mscomm.AssignedRequests{}):
+		fsm.RequestsClearAll()
+		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, inbetweenFloorsTimer, senderCh)
+
+	default:
+		rblog.Red.Println("Slave received invalid type on fromMasterCh", payload)
 	}
 }

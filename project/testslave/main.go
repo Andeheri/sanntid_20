@@ -1,18 +1,20 @@
 package main
 
 import (
-	"fmt"
 	"project/slave"
+	"time"
 )
 
 func main() {
-	fmt.Println("Hello, World!")
 	// initialMasterAddress := "10.100.23.192:12221"
-	initialMasterAddress := "localhost:12221"
-	masterAddress := make(chan string)
-	go slave.Start(initialMasterAddress, masterAddress)
+	initialMasterAddress := "127.0.0.1:11000"
+	masterAddressCh := make(chan string)
 
-	// time.Sleep(20 * time.Second)
-	// masterAddress <- "localhost:11001"
+	go slave.Start(masterAddressCh)
+
+	time.Sleep(10 * time.Second)
+	masterAddressCh <- initialMasterAddress
+	time.Sleep(10 * time.Second)
+	masterAddressCh <- "127.0.0.1:11001"
 	select {}
 }
