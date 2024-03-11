@@ -14,7 +14,6 @@ import (
 type FromMSE struct {
 	ElevatorRole        Role
 	MasterIP            string
-	CurrentIPAddressMap map[string]int
 }
 
 type ToMSE struct {
@@ -73,75 +72,77 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 	}
 }
 
-func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, UDPRecieveChannel <-chan string, mseUpdatedIPMapChannel chan<- ToMSE) {
-	knownMap := make(map[string]int)      // Known IP-addresses with number keeping track of 'aliveness'
-	aliveMap := make(map[string]struct{}) // IP-addresses that sent keep-alive over UDP
+func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, UDPRecieveChannel <-chan string, fromMSEChannel chan<- FromMSE) {
+	knownIPMap := make(map[string]int)      // Known IP-addresses with number keeping track of 'aliveness'
 	timer := time.NewTicker(deltaT)       // Timer to check for keep-alive messages
 	hasChanged := false
 	defer timer.Stop()
+
+	// Check if connected to internet
+	localIP, err := LocalIP()
+	if err != nil {
+		rblog.Red.Println("Error when getting local IP. Probably disconnected.")
+		masterSlaveElection(fromMSEChannel, map[string]int{LoopbackIp: NumKeepAlive})
+	} else {
+		rblog.Green.Printf("Local IP: %s", localIP)
+	}
+
 	for {
 		select {
 		case IPAddr := <-UDPRecieveChannel:
 			// Received keep alive message
-			aliveMap[IPAddr] = struct{}{}
-			_, exists := knownMap[IPAddr]
+			_, exists := knownIPMap[IPAddr]
+			knownIPMap[IPAddr] = numKeepAlive
 			if !exists {
-				knownMap[IPAddr] = numKeepAlive
 				hasChanged = true
 			}
 		case <-timer.C:
-			// Timer fired due to deltaT duration passing
-			// Compute the difference.
-			for ip, count := range knownMap {
-				if _, found := aliveMap[ip]; !found {
-					count -= 1
-					knownMap[ip] = count
-					if count <= 0 {
-						hasChanged = true
-						delete(knownMap, ip) // Remove from knownMap as it reached the limit
-					}
-				} else {
-					knownMap[ip] = numKeepAlive // Reset back to numKeepAlive since it's alive
+			for ip, count := range knownIPMap {
+				count -= 1
+				if count == 0 {
+					delete(knownIPMap, ip)
+					hasChanged = true
+				} else{
+					knownIPMap[ip] = count
 				}
 			}
-			// Clear the aliveMap for the next interval
-			for ip := range aliveMap {
-				delete(aliveMap, ip)
-			}
-
 			// Check if master-slave-configuration needs to be updated
 			if hasChanged {
-				localIP, _ := LocalIP()
-				// Run master slave election
-				copyKnownMap := MakeDeepCopyMap(knownMap)
-				mseUpdatedIPMapChannel <- ToMSE{LocalIP: localIP, IPAddressMap: copyKnownMap}
+				masterSlaveElection(fromMSEChannel, knownIPMap)
 			}
 			hasChanged = false
 		}
 	}
 }
 
-func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) {
-	var highestIPInt int = 0
-	var highestIPString string = "0.0.0.0"
-	var lastMasterIP string = LoopbackIp
-	var lastRole Role = Unknown
+var lastMasterIP string
 
-	for mseData := range updatedIPAddressCh {
-		localIP := mseData.LocalIP
-		IPAddressMap := mseData.IPAddressMap
-		rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
+func masterSlaveElection(mseCh chan<- FromMSE, IPAddressMap map[string]int) {
+	rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
 
-		role := Unknown
-		highestIPInt = 0
-		if len(IPAddressMap) <= 1 { // Elevator is disconnected or alone
-			rblog.Cyan.Println("--- Master Slave Election ---")
-			lastRole = Master
-			lastMasterIP = LoopbackIp // (Always smaller than a regular IP)
-			mseCh <- FromMSE{ElevatorRole: Master, MasterIP: lastMasterIP, CurrentIPAddressMap: IPAddressMap}
-			continue
+	role := Slave
+	masterIP := getMasterIP(IPAddressMap)
+
+	if masterIP != lastMasterIP {
+		rblog.Cyan.Println("--- Master Slave Election ---")
+		if masterIP == LoopbackIp {
+			role = Master
+		} else {
+			role = Slave
 		}
+		lastMasterIP = masterIP
+		mseCh <- FromMSE{ElevatorRole: role, MasterIP: masterIP}
+	}
+}
 
+// Finds masterIP by choosing the IP with the higest numerical value
+func getMasterIP(IPAddressMap map[string]int) string{
+	rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
+	var highestIPInt int = 0
+	var highestIPString string
+	if len(IPAddressMap) <= 1 { // Elevator is disconnected or alone
+		return LoopbackIp
+	} else{
 		for ipAddress := range IPAddressMap {
 			ipAddressInt := IPToNum(ipAddress)
 			if ipAddressInt > highestIPInt {
@@ -149,20 +150,11 @@ func MasterSlaveElection(mseCh chan<- FromMSE, updatedIPAddressCh <-chan ToMSE) 
 				highestIPInt = ipAddressInt
 			}
 		}
-
-		if highestIPString != lastMasterIP {
-			rblog.Cyan.Println("--- Master Slave Election ---")
-			if highestIPString == localIP {
-				role = Master
-			} else {
-				role = Slave
-			}
-			// Check if a change in roles needs to take place
-			if lastRole != role || lastMasterIP != highestIPString {
-				lastRole = role
-				lastMasterIP = highestIPString
-				mseCh <- FromMSE{ElevatorRole: role, MasterIP: highestIPString, CurrentIPAddressMap: IPAddressMap}
-			}
+		localIP, _ := LocalIP()
+		if highestIPString == localIP {  // To reduce number of reelections needed
+			return LoopbackIp
+		} else{
+			return highestIPString
 		}
 	}
 }

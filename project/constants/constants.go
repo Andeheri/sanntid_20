@@ -10,7 +10,6 @@ type Role string
 const (
 	Master  Role = "master"
 	Slave   Role = "slave"
-	Unknown Role = "unknown"
 )
 
 // Variables to tweak system
