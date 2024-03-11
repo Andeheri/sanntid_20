@@ -54,7 +54,7 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 	switch Elev.Behaviour {
 	case elevator.EB_DoorOpen:
 		if requests.ShouldClearImmediately(Elev, btn_floor, btn_type) {
-            Elev = requests.Clear(Elev, btn_floor, btn_type, clearRequestCh)
+			Elev = requests.Clear(Elev, btn_floor, btn_type, clearRequestCh)
 			doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
 
 		} else {
@@ -104,9 +104,9 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 			Elev = requests.ClearAtCurrentFloor(Elev, clearRequestCh)
 		case elevator.EB_Moving:
 			outputDevice.MotorDirection(Elev.Dirn)
-            if Elev.Dirn != elevio.MD_Stop{
-                inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
-            }
+			if Elev.Dirn != elevio.MD_Stop {
+				inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
+			}
 		case elevator.EB_Idle:
 
 		}
@@ -138,7 +138,7 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, inbetweenFloorsTimer *t
 			//rblog.White.Println(Elev.Config.DoorOpenDuration_s)
 			SetAllLights(&Elev)
 			Elev.Behaviour = elevator.EB_DoorOpen
-            inbetweenFloorsTimer.Stop()
+			inbetweenFloorsTimer.Stop()
 		}
 	default:
 	}
@@ -171,16 +171,16 @@ func OnDoorTimeout(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clea
 		case elevator.EB_Moving:
 			outputDevice.DoorLight(false)
 			outputDevice.MotorDirection(elevio.MotorDirection(Elev.Dirn))
-            if Elev.Dirn != elevio.MD_Stop{
-                inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
-            }
+			if Elev.Dirn != elevio.MD_Stop {
+				inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
+			}
 
 		case elevator.EB_Idle:
 			outputDevice.DoorLight(false)
 			outputDevice.MotorDirection(elevio.MotorDirection(Elev.Dirn))
-            if Elev.Dirn != elevio.MD_Stop{
-                inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
-            }
+			if Elev.Dirn != elevio.MD_Stop {
+				inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
+			}
 
 		}
 	}
@@ -228,8 +228,13 @@ func getCabRequests() []bool {
 }
 
 func GetState() mscomm.ElevatorState {
+	behavior := string(Elev.Behaviour)
+	//should not be part of hall assignment when blocked
+	if Elev.Obstructed || Elev.Floor == -1 {
+		behavior = "blocked"
+	}
 	state := mscomm.ElevatorState{
-		Behavior:    string(Elev.Behaviour),
+		Behavior:    behavior,
 		Floor:       Elev.Floor,
 		Direction:   elevio.Elevio_dirn_toString(Elev.Dirn),
 		CabRequests: getCabRequests(),

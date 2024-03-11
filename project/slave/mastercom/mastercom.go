@@ -11,25 +11,65 @@ import (
 
 var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
-func EstablishTCPConnection(address string, connCh chan<- *net.TCPConn) {
+func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromMasterCh chan<- mscomm.Package) {
+	var currentMasterAddress string
+	var masterConn *net.TCPConn
+	var attempts int = 0
+	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
 
-	masterAddress, err := net.ResolveTCPAddr("tcp", address)
-	if err != nil {
-		rblog.Red.Println("Error resolving TCP address from master:", err)
-	}
+	var reconnectTime time.Duration = 50 * time.Millisecond
 
-	attempts := 5
-	for i := 0; i < attempts; i++ {
-		masterConn, err := net.DialTCP("tcp", nil, masterAddress)
-		if err == nil {
-			connCh <- masterConn
-			return
-		} else {
-			time.Sleep(50 * time.Millisecond)
+	retry := time.NewTimer(reconnectTime)
+	retry.Stop()
+
+	for {
+		select {
+			case newMasterAddress := <-masterAddressCh:
+				if newMasterAddress != currentMasterAddress {
+					rblog.White.Println("Master address changed to:", newMasterAddress)
+					currentMasterAddress = newMasterAddress
+					if masterConn != nil {
+						masterConn.Close()
+						//send something to close TCPSender
+						select {
+						case senderCh <- struct{}{}:
+						case <-time.After(10 * time.Millisecond):
+							rblog.Yellow.Println("Timed out on sending close of TCPSender")
+						}
+					}
+					retry.Reset(0)
+				}
+			
+			case disconnect := <-masterDisconnectCh:
+				rblog.White.Println("Disconnected from master:", disconnect.Addr)
+				rblog.White.Println("Attempting reconnect",currentMasterAddress)
+				select {
+				case senderCh <- struct{}{}:
+				case <-time.After(10 * time.Millisecond):
+					rblog.Yellow.Println("Timed out on sending close of TCPSender")
+				}
+				if disconnect.Addr == currentMasterAddress {
+					rblog.Yellow.Println("Disconnected from master attempting reconnect")
+					retry.Reset(0)
+				}
+
+			case <-retry.C:
+				rblog.White.Println("Attempting dialing to connect to master")
+				conn, err := net.DialTimeout("tcp4", currentMasterAddress, 100 * time.Millisecond)
+				if err == nil {
+					rblog.White.Println("Connected to master")
+					masterConn = conn.(*net.TCPConn)
+					StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh)
+					attempts = 0
+				} else {
+					retry.Reset(reconnectTime)
+					attempts += 1
+					if attempts > 20 {
+						panic("Failed to connect to master")
+					}
+				}
 		}
-
 	}
-	connCh <- nil
 }
 
 func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh chan<- mscomm.Package, masterDisconnect chan<- mscomm.ConnectionEvent) {
