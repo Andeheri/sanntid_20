@@ -21,12 +21,11 @@ func main() {
 	})
 
 	// Variables
-	elevatorRole := Unknown
+	elevatorRole := Slave
 	masterIP := LoopbackIp // Default is loopback address
 
 	// Channels
 	recieveUDPChannel := make(chan string)
-	toMSEChannel := make(chan scout.ToMSE)
 	fromMSEChannel := make(chan scout.FromMSE)
 	masterAddressChannel := make(chan string)
 	masterQuitChannel := make(chan struct{})
@@ -34,19 +33,9 @@ func main() {
 	// Start all go-threads
 	go scout.ListenUDP(recieveUDPChannel)
 	go scout.SendKeepAliveMessage(DeltaTKeepAlive)
-	go scout.TrackMissedKeepAliveMessagesAndMSE(DeltaTSamplingKeepAlive, NumKeepAlive, recieveUDPChannel, toMSEChannel)
-	go scout.MasterSlaveElection(fromMSEChannel, toMSEChannel)
+	go scout.TrackMissedKeepAliveMessagesAndMSE(DeltaTSamplingKeepAlive, NumKeepAlive, recieveUDPChannel, fromMSEChannel)
 
 	go slave.Start(masterAddressChannel)
-
-	localIP, err := scout.LocalIP()
-	if err != nil {
-		// Should maybe become master
-		rblog.Red.Println("Error when getting local IP. Probably disconnected.")
-		toMSEChannel <- scout.ToMSE{LocalIP: localIP, IPAddressMap: map[string]int{localIP: NumKeepAlive}}
-	} else {
-		rblog.Green.Printf("Local IP: %s", localIP)
-	}
 
 	lastRole := Slave
 	for {
