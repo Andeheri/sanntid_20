@@ -48,11 +48,8 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 			conn, err := net.DialTimeout("tcp4", currentMasterAddress, 100*time.Millisecond)
 			if err == nil {
 				rblog.White.Println("Connected to master")
-				select {
-				case <-time.After(10 * time.Millisecond):
-					rblog.Yellow.Println("Timed out on sending close of TCPSender")
-				case senderQuitCh <- struct{}{}: //Quitting the old sender
-				}
+				close(senderQuitCh)
+				senderQuitCh = make(chan struct{})
 				masterConn = conn.(*net.TCPConn)
 				StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh, senderQuitCh)
 				attempts = 0
@@ -83,15 +80,15 @@ func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh 
 
 func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer) {
 
-	switch reflect.TypeOf(payload) {
-	case reflect.TypeOf(mscomm.RequestState{}):
+	switch payload := payload.(type) {
+	case mscomm.RequestState:
 		select {
 		case senderCh <- fsm.GetState():
 		case <-time.After(10 * time.Millisecond):
 			rblog.Yellow.Println("Sending state timed out")
 		}
 
-	case reflect.TypeOf(mscomm.RequestHallRequests{}):
+	case mscomm.RequestHallRequests:
 		select {
 		case senderCh <- hallRequests:
 			rblog.White.Println("Sending hallrequests")
@@ -99,23 +96,23 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 			rblog.Yellow.Println("Sending hallrequests timed out")
 		}
 
-	case reflect.TypeOf(mscomm.SyncRequests{}):
-		hallRequests = payload.(mscomm.SyncRequests).Requests
+	case mscomm.SyncRequests:
+		hallRequests = payload.Requests
 		select {
-		case senderCh <- mscomm.SyncOK{Id: payload.(mscomm.SyncRequests).Id}:
+		case senderCh <- mscomm.SyncOK{Id: payload.Id}:
 		case <-time.After(10 * time.Millisecond):
 			rblog.Yellow.Println("Sending SyncOK timed out")
 		}
 
-	case reflect.TypeOf(mscomm.Lights{}):
-		fsm.Elev.HallLights = payload.(mscomm.Lights)
+	case mscomm.Lights:
+		fsm.Elev.HallLights = payload
 		fsm.SetAllLights(&fsm.Elev)
 		//should also set hallrequests as lights are higher rank
-		hallRequests = mscomm.HallRequests(payload.(mscomm.Lights))
+		hallRequests = mscomm.HallRequests(payload)
 
-	case reflect.TypeOf(mscomm.AssignedRequests{}):
+	case mscomm.AssignedRequests:
 		fsm.RequestsClearAll()
-		fsm.RequestsSetAll(payload.(mscomm.AssignedRequests), doorTimer, inbetweenFloorsTimer, senderCh)
+		fsm.RequestsSetAll(payload, doorTimer, inbetweenFloorsTimer, senderCh)
 
 	default:
 		rblog.Red.Println("Slave received invalid type on fromMasterCh", payload)
