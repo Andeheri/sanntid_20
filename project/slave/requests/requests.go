@@ -2,12 +2,10 @@ package requests
 
 import (
 	"project/mscomm"
-	"project/rblog"
 	"project/slave/cabfile"
 	"project/slave/elevator"
 	"project/slave/elevio"
 	"project/slave/iodevice"
-	"time"
 )
 
 type DirnBehaviourPair struct {
@@ -109,52 +107,35 @@ func ShouldStop(e elevator.Elevator) bool {
 }
 
 func ShouldClearImmediately(e elevator.Elevator, btn_floor int, btn_type elevio.ButtonType) bool {
-	switch e.Config.ClearRequestVariant {
-	case elevator.CV_All:
-		return e.Floor == btn_floor
-	case elevator.CV_InDirn:
-		return e.Floor == btn_floor && (e.Dirn == elevio.MD_Up && btn_type == elevio.BT_HallUp || e.Dirn == elevio.MD_Down && btn_type == elevio.BT_HallDown || e.Dirn == elevio.MD_Stop || btn_type == elevio.BT_Cab)
-	default:
-		return false
-	}
+	return e.Floor == btn_floor && (e.Dirn == elevio.MD_Up && btn_type == elevio.BT_HallUp || e.Dirn == elevio.MD_Down && btn_type == elevio.BT_HallDown || e.Dirn == elevio.MD_Stop || btn_type == elevio.BT_Cab)
 }
 
 func ClearAtCurrentFloor(e elevator.Elevator, clearRequestCh chan<- interface{}) elevator.Elevator {
 
-	switch e.Config.ClearRequestVariant {
-	case elevator.CV_All:
-		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
-			e = Clear(e, e.Floor, elevio.ButtonType(btn), clearRequestCh)
-		}
+	e.Requests[e.Floor][elevio.BT_Cab] = 0
+	cabfile.Clear(e.Floor)
 
-	case elevator.CV_InDirn:
-		e.Requests[e.Floor][elevio.BT_Cab] = 0
-		cabfile.Clear(e.Floor)
-
-		switch e.Dirn {
-		case elevio.MD_Up:
-			if !requestsAbove(e) && e.Requests[e.Floor][elevio.BT_HallUp] == 0 {
-				e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
-			}
-			e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
-
-		case elevio.MD_Down:
-			if !requestsBelow(e) && e.Requests[e.Floor][elevio.BT_HallDown] == 0 {
-				e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
-			}
-			e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
-
-		case elevio.MD_Stop:
-			e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
-			e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
-		default:
-			e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
+	switch e.Dirn {
+	case elevio.MD_Up:
+		if !requestsAbove(e) && e.Requests[e.Floor][elevio.BT_HallUp] == 0 {
 			e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
 		}
+		e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
 
+	case elevio.MD_Down:
+		if !requestsBelow(e) && e.Requests[e.Floor][elevio.BT_HallDown] == 0 {
+			e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
+		}
+		e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
+
+	case elevio.MD_Stop:
+		e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
+		e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
 	default:
-
+		e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
+		e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
 	}
+
 	return e
 }
 
@@ -164,10 +145,6 @@ func Clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clearReque
 	}
 	e.Requests[floor][btnType] = 0
 	e.HallLights[floor][btnType] = false
-	select {
-	case clearRequestCh <- mscomm.OrderComplete{Floor: floor, Button: int(btnType)}:
-	case <-time.After(10 * time.Millisecond):
-		rblog.Yellow.Println("Sending ordercomplete timed out")
-	}
+	clearRequestCh <- mscomm.OrderComplete{Floor: floor, Button: int(btnType)}
 	return e
 }

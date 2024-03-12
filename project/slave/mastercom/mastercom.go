@@ -12,6 +12,8 @@ import (
 
 var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
+var TCPSendTimeOut time.Duration = 100 * time.Millisecond
+
 func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromMasterCh chan<- mscomm.Package) {
 	var currentMasterAddress string
 	var masterConn *net.TCPConn
@@ -19,10 +21,11 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
 	senderQuitCh := make(chan struct{})
 
-	var reconnectTime time.Duration = 50 * time.Millisecond
+	var reconnectDelay time.Duration = 50 * time.Millisecond
+	var dialTimeout time.Duration = 100 * time.Millisecond
 
-	retry := time.NewTimer(reconnectTime)
-	retry.Stop()
+	connAttempt := time.NewTimer(reconnectDelay)
+	connAttempt.Stop()
 
 	for {
 		select {
@@ -33,19 +36,19 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 				if masterConn != nil {
 					masterConn.Close()
 				}
-				retry.Reset(0)
+				connAttempt.Reset(0)
 			}
 
 		case disconnect := <-masterDisconnectCh:
 			rblog.White.Println("Disconnected from master:", disconnect.Addr)
 			if disconnect.Addr == currentMasterAddress {
 				rblog.Yellow.Println("Disconnected from master attempting reconnect", currentMasterAddress)
-				retry.Reset(0)
+				connAttempt.Reset(0)
 			}
 
-		case <-retry.C:
+		case <-connAttempt.C:
 			rblog.White.Println("Attempting dialing to connect to master")
-			conn, err := net.DialTimeout("tcp4", currentMasterAddress, 100*time.Millisecond)
+			conn, err := net.DialTimeout("tcp4", currentMasterAddress, dialTimeout)
 			if err == nil {
 				rblog.White.Println("Connected to master")
 				close(senderQuitCh)
@@ -54,7 +57,7 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 				StartUp(masterConn, senderCh, fromMasterCh, masterDisconnectCh, senderQuitCh)
 				attempts = 0
 			} else {
-				retry.Reset(reconnectTime)
+				connAttempt.Reset(reconnectDelay)
 				attempts += 1
 				if attempts > 20 {
 					elevio.SetMotorDirection(elevio.MD_Stop)
@@ -75,7 +78,7 @@ func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh 
 		reflect.TypeOf(mscomm.AssignedRequests{}),
 	}
 
-	go mscomm.TCPSender(masterConn, senderCh, senderQuitCh)
+	go mscomm.TCPSender(masterConn, senderCh, senderQuitCh, &TCPSendTimeOut)
 	go mscomm.TCPReader(masterConn, fromMasterCh, masterDisconnect, allowedTypes[:]...)
 }
 

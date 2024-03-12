@@ -26,14 +26,12 @@ func Start(masterAddressCh <-chan string) {
 	fromMasterCh := make(chan mscomm.Package)
 	go mastercom.ConnManager(masterAddressCh, senderCh, fromMasterCh)
 
-	//TODO: set to something other than -1
-	doorTimer := time.NewTimer(-1)
-	inbetweenFloorsTimer := time.NewTimer(-1)
+	doorTimer := time.NewTimer(fsm.Elev.Config.DoorOpenDuration)
+	inbetweenFloorsTimer := time.NewTimer(fsm.Elev.Config.InbetweenFloorsDuration)
 	inbetweenFloorsTimer.Stop()
-
 	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
 
-	watchDogTime := 3 * time.Second
+	watchDogTime := 1 * time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Watchdog timeout on slave")

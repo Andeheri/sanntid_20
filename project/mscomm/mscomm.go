@@ -174,7 +174,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 
 // Intended to run as a goroutine.
 // Returns only when sending something on quitCh.
-func TCPSender(conn *net.TCPConn, ch <-chan interface{}, quitCh <-chan struct{}) {
+func TCPSender(conn *net.TCPConn, ch <-chan interface{}, quitCh <-chan struct{}, timeout *time.Duration) {
 
 	defer conn.Close()
 
@@ -189,7 +189,9 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}, quitCh <-chan struct{})
 				rblog.Red.Println(err)
 				continue
 			}
-
+			if timeout != nil {
+				conn.SetWriteDeadline(time.Now().Add(*timeout))
+			}
 			if err := encoder.Encode(ttj); err != nil {
 				//Probably disconnected
 				rblog.Red.Println(err)
