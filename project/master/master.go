@@ -47,20 +47,7 @@ const (
 var logfile, _ = os.OpenFile("masterlog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 var flog = log.New(logfile, "master: ", log.Ltime|log.Lmicroseconds|log.Lshortfile)
 
-func (m *master) Init() {
-	m.slaves = make(map[string]*slaveType)
-	m.communityState.HallRequests = make(mscomm.HallRequests, floorCount)
-	m.communityState.States = make(map[string]mscomm.ElevatorState)
-	m.syncAttempts = make(map[int]syncAttemptType)
-
-	m.applicationTimeoutCh = make(chan string)
-	m.syncTimeoutCh = make(chan int)
-
-	m.collectStateTimer = time.NewTimer(collectStateTimeout)
-	m.collectStateTimer.Stop()
-
-}
-
+// Run as a goroutine. Will start to quit after something is sent on quitCh or if it closes
 func Run(masterPort int, quitCh chan struct{}) {
 
 	rblog.Magenta.Print("--- Starting master ---")
@@ -69,7 +56,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 	terminateTimer := time.NewTimer(terminationDelay)
 	terminateTimer.Stop()
 	m := master{}
-	m.Init()
+	m.init()
 
 	//init watchdog
 	watchdog := time.AfterFunc(watchdogTimeout, func() {
@@ -149,6 +136,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 			}
 			m.assignHallRequests()
 		case <-quitCh:
+			quitCh = nil //avoid endless loop if quitCh is closed
 			flog.Println("[INFO] master ready to quit")
 			listener.Close()
 			for addr := range m.slaves {
@@ -177,10 +165,6 @@ func Run(masterPort int, quitCh chan struct{}) {
 				m.communityState.HallRequests.Merge(&slaveHallRequests)
 				m.slaves[message.Addr].hired = true
 				m.slaves[message.Addr].ch <- mscomm.Lights(m.communityState.HallRequests)
-				m.slaves[message.Addr].ch <- mscomm.SyncRequests{
-					Requests: m.communityState.HallRequests, //TODO: copy
-					Id:       -1,                            //Unsafe sync
-				}
 				rblog.Magenta.Println("slave hired:", message.Addr)
 				flog.Println("[INFO] slave hired:", message.Addr)
 
@@ -258,17 +242,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				orderComplete := message.Payload.(mscomm.OrderComplete)
 				flog.Println("[INFO]", message.Addr, "completed order:", orderComplete)
 				m.communityState.HallRequests[orderComplete.Floor][orderComplete.Button] = false
-				syncRequests := mscomm.SyncRequests{
-					Requests: m.communityState.HallRequests,
-					Id:       -1, //Unsafe sync
-				}
-				for addr, slave := range m.slaves {
-					if slave.hired {
-						flog.Println("[INFO] syncing cleared order to", addr)
-						slave.ch <- syncRequests
-						slave.ch <- mscomm.Lights(m.communityState.HallRequests)
-					}
-				}
+				m.shareLights()
 
 				//Do not need to assign here, right?
 
@@ -297,8 +271,21 @@ func Run(masterPort int, quitCh chan struct{}) {
 			//unblock select to reset watchdog
 		}
 
-		watchdog.Reset(watchdogTimeout)
+		watchdog.Reset(watchdogTimeout) //flink bisk🐶
 	}
+}
+
+func (m *master) init() {
+	m.slaves = make(map[string]*slaveType)
+	m.communityState.HallRequests = make(mscomm.HallRequests, floorCount)
+	m.communityState.States = make(map[string]mscomm.ElevatorState)
+	m.syncAttempts = make(map[int]syncAttemptType)
+
+	m.applicationTimeoutCh = make(chan string)
+	m.syncTimeoutCh = make(chan int)
+
+	m.collectStateTimer = time.NewTimer(collectStateTimeout)
+	m.collectStateTimer.Stop()
 }
 
 func (m *master) dismiss(addr string) {
