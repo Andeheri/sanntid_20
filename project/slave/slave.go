@@ -40,25 +40,17 @@ func Start(masterAddressCh <-chan string) {
 	})
 	defer watchDog.Stop()
 
-	rblog.White.Println("slave startet")
+	rblog.White.Println("Slave started")
 
 	for {
 		select {
 		case a := <-drvButtonsCh:
 			if a.Button == elevio.BT_Cab {
 				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
-				select {
-				case senderCh <- fsm.GetState():
-				case <-time.After(10 * time.Millisecond):
-					rblog.Yellow.Println("Timed out on sending state after cab button press")
-				}
+				senderCh <- fsm.GetState()
 			} else {
 				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
-				select {
-				case senderCh <- pressed:
-				case <-time.After(10 * time.Millisecond):
-					rblog.Yellow.Println("Timed out on sending button press")
-				}
+				senderCh <- pressed
 			}
 
 		case a := <-drvFloorsCh:
@@ -67,11 +59,7 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-drvObstrCh:
 			rblog.Yellow.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
-			select {
-			case senderCh <- fsm.GetState():
-			case <-time.After(10 * time.Millisecond):
-				rblog.Yellow.Println("Timed out on sending state after change in obstruction:", a)
-			}
+			senderCh <- fsm.GetState()
 
 		case <-doorTimer.C:
 			fsm.OnDoorTimeout(doorTimer, inbetweenFloorsTimer, senderCh)
@@ -79,11 +67,7 @@ func Start(masterAddressCh <-chan string) {
 		case <-inbetweenFloorsTimer.C:
 			rblog.Red.Println("No floor arrival, setting Elev.Floor = -1")
 			fsm.Elev.Floor = -1
-			select {
-			case senderCh <- fsm.GetState():
-			case <-time.After(10 * time.Millisecond):
-				rblog.Yellow.Println("Timed out on sending state after inbetweenFloorsTimer timeout")
-			}
+			senderCh <- fsm.GetState()
 
 		case a := <-fromMasterCh:
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer, inbetweenFloorsTimer)

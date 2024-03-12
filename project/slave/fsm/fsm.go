@@ -49,7 +49,6 @@ func SetAllLights(es *elevator.Elevator) {
 }
 
 func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
-	//Elev.Print()
 
 	switch Elev.Behaviour {
 	case elevator.EB_DoorOpen:
@@ -59,41 +58,23 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 
 		} else {
 			if btn_type == elevio.BT_Cab {
-				err := cabfile.Set(btn_floor)
-				if err != nil {
-					err = cabfile.Set(btn_floor)
-					if err != nil {
-						panic("Cab data could not be set to file, elevator dooropen")
-					}
-				}
+				setCabFile(btn_floor)
 			}
 			Elev.Requests[btn_floor][btn_type] = 1
 		}
 
 	case elevator.EB_Moving:
 		if btn_type == elevio.BT_Cab {
-			err := cabfile.Set(btn_floor)
-			if err != nil {
-				err = cabfile.Set(btn_floor)
-				if err != nil {
-					elevio.SetMotorDirection(elevio.MD_Stop)
-					panic("Cab data could not be set to file, elevator moving")
-				}
-			}
+			setCabFile(btn_floor)
 		}
 		Elev.Requests[btn_floor][btn_type] = 1
 
 	case elevator.EB_Idle:
 		if btn_type == elevio.BT_Cab {
-			err := cabfile.Set(btn_floor)
-			if err != nil {
-				err = cabfile.Set(btn_floor)
-				if err != nil {
-					panic("Cab data could not be set to file, elevator idle")
-				}
-			}
+			setCabFile(btn_floor)
 		}
 		Elev.Requests[btn_floor][btn_type] = 1
+
 		pair := requests.ChooseDirection(Elev)
 		Elev.Dirn = pair.Dirn
 		Elev.Behaviour = pair.Behaviour
@@ -112,17 +93,10 @@ func OnRequestButtonPress(btn_floor int, btn_type elevio.ButtonType, doorTimer *
 		}
 
 	}
-
 	SetAllLights(&Elev)
-
-	//rblog.White.Println("\nNew state:")
-	//Elev.Print();
 }
 
 func OnFloorArrival(newFloor int, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
-	// rblog.White.Printf("\n(newfloor: %d)\n",newFloor)
-	//Elev.Print();
-
 	Elev.Floor = newFloor
 
 	outputDevice.FloorIndicator(Elev.Floor)
@@ -130,27 +104,19 @@ func OnFloorArrival(newFloor int, doorTimer *time.Timer, inbetweenFloorsTimer *t
 	switch Elev.Behaviour {
 	case elevator.EB_Moving:
 		if requests.ShouldStop(Elev) {
-			// rblog.White.Println("Opening door")
 			outputDevice.MotorDirection(elevio.MD_Stop)
 			outputDevice.DoorLight(true)
 			Elev = requests.ClearAtCurrentFloor(Elev, clearRequestCh)
 			doorTimer.Reset(Elev.Config.DoorOpenDuration_s)
-			//rblog.White.Println(Elev.Config.DoorOpenDuration_s)
 			SetAllLights(&Elev)
 			Elev.Behaviour = elevator.EB_DoorOpen
 			inbetweenFloorsTimer.Stop()
 		}
 	default:
 	}
-
-	//rblog.White.Println("\nNew state:")
-	//Elev.Print();
 }
 
 func OnDoorTimeout(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
-	// rblog.White.Println("\n(doorTimeout)")
-
-	//Elev.Print();
 
 	if Elev.Behaviour == elevator.EB_DoorOpen {
 
@@ -184,16 +150,11 @@ func OnDoorTimeout(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clea
 
 		}
 	}
-
-	//rblog.White.Println("\nNew state:")
-	//Elev.Print();
 }
 
 func OnObstruction(is_obstructed bool) {
 	Elev.Obstructed = is_obstructed
 }
-
-// clear all requests when receiving restructured list of orders from master.?
 func RequestsClearAll() {
 	for btn := 0; btn < 2; btn++ {
 		for floor := 0; floor < iodevice.N_FLOORS; floor++ {
@@ -202,9 +163,7 @@ func RequestsClearAll() {
 	}
 }
 
-// call fsm button press for the restructured list of orders from master.?
 func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
-	//fsm on butonpress for loop
 	for btn := 0; btn < 2; btn++ {
 		for floor := 0; floor < iodevice.N_FLOORS; floor++ {
 			if masterRequests[floor][btn] {
@@ -240,4 +199,15 @@ func GetState() mscomm.ElevatorState {
 		CabRequests: getCabRequests(),
 	}
 	return state
+}
+
+func setCabFile(btn_floor int) {
+	err := cabfile.Set(btn_floor)
+	if err != nil {
+		err = cabfile.Set(btn_floor)
+	}
+	if err != nil {
+		outputDevice.MotorDirection(elevio.MD_Stop)
+		panic("Cab data could not be set to file")
+	}
 }

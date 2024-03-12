@@ -13,6 +13,7 @@ import (
 
 var cabsMain string = ""
 var cabsBackup string = ""
+var allCabs []int = []int{1, 1, 1, 1}
 
 func Read() []int {
 	if cabsMain == "" {
@@ -20,7 +21,7 @@ func Read() []int {
 		exeDir, err := getCurrentDirectory()
 		if err != nil {
 			rblog.Red.Println("Error getting current directory:", err)
-			return nil
+			return allCabs
 		}
 		cabsMain = filepath.Join(exeDir, "cabsMain.txt")
 		cabsBackup = filepath.Join(exeDir, "cabsBackup.txt")
@@ -33,7 +34,7 @@ func Read() []int {
 		fileData, err = os.ReadFile(cabsBackup)
 		if err != nil || len(string(fileData)) != iodevice.N_FLOORS {
 			rblog.Red.Println("Error reading from backup file:", err)
-			return nil
+			return allCabs
 		}
 	}
 
@@ -43,7 +44,7 @@ func Read() []int {
 		val, err := strconv.Atoi(string(char))
 		if err != nil {
 			rblog.Red.Println("Error converting string to int:", err)
-			return nil
+			return allCabs
 		}
 		result[i] = val
 	}
@@ -73,9 +74,6 @@ func writeToFiles(data []int) error {
 
 func Set(floor int) error {
 	data := Read()
-	if data == nil {
-		return fmt.Errorf("unable to read cabdata from files")
-	}
 	data[floor] = 1
 	if err := writeToFiles(data); err != nil {
 		return err
@@ -85,9 +83,6 @@ func Set(floor int) error {
 
 func Clear(floor int) error {
 	data := Read()
-	if data == nil {
-		return fmt.Errorf("unable to read cabdata from files")
-	}
 	data[floor] = 0
 	if err := writeToFiles(data); err != nil {
 		return err
@@ -101,7 +96,6 @@ func getCurrentDirectory() (string, error) {
 	if !ok {
 		return "", errors.New("unable to get current directory")
 	}
-
 	// Get the directory containing the file
 	packageDir := filepath.Dir(filename)
 	return packageDir, nil

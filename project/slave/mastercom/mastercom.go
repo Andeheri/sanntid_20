@@ -4,6 +4,7 @@ import (
 	"net"
 	"project/mscomm"
 	"project/rblog"
+	"project/slave/elevio"
 	"project/slave/fsm"
 	"reflect"
 	"time"
@@ -37,9 +38,8 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 
 		case disconnect := <-masterDisconnectCh:
 			rblog.White.Println("Disconnected from master:", disconnect.Addr)
-			rblog.White.Println("Attempting reconnect", currentMasterAddress)
 			if disconnect.Addr == currentMasterAddress {
-				rblog.Yellow.Println("Disconnected from master attempting reconnect")
+				rblog.Yellow.Println("Disconnected from master attempting reconnect", currentMasterAddress)
 				retry.Reset(0)
 			}
 
@@ -57,6 +57,7 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 				retry.Reset(reconnectTime)
 				attempts += 1
 				if attempts > 20 {
+					elevio.SetMotorDirection(elevio.MD_Stop)
 					panic("Failed to connect to master")
 				}
 			}
@@ -82,28 +83,16 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 
 	switch payload := payload.(type) {
 	case mscomm.RequestState:
-		select {
-		case senderCh <- fsm.GetState():
-		case <-time.After(10 * time.Millisecond):
-			rblog.Yellow.Println("Sending state timed out")
-		}
+		senderCh <- fsm.GetState()
 
 	case mscomm.RequestHallRequests:
-		select {
-		case senderCh <- hallRequests:
-			rblog.White.Println("Sending hallrequests")
-		case <-time.After(10 * time.Millisecond):
-			rblog.Yellow.Println("Sending hallrequests timed out")
-		}
-
+		senderCh <- hallRequests
+		rblog.White.Println("Sent hallrequests")
+		
 	case mscomm.SyncRequests:
 		hallRequests = payload.Requests
-		select {
-		case senderCh <- mscomm.SyncOK{Id: payload.Id}:
-		case <-time.After(10 * time.Millisecond):
-			rblog.Yellow.Println("Sending SyncOK timed out")
-		}
-
+		senderCh <- mscomm.SyncOK{Id: payload.Id}
+		
 	case mscomm.Lights:
 		fsm.Elev.HallLights = payload
 		fsm.SetAllLights(&fsm.Elev)
