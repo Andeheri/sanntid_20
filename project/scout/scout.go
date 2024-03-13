@@ -180,7 +180,6 @@ func masterSlaveElection(IPAddressMap map[string]int) (FromMSE, bool){
 
 // Finds masterIP by choosing the IP with the highest numerical value
 func getMasterIP(IPAddressMap map[string]int) string{
-	rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
 	var highestIPInt []byte = []byte{0, 0, 0, 0}
 	var highestIPString string
 	if len(IPAddressMap) <= 1 { // Elevator is disconnected or alone
