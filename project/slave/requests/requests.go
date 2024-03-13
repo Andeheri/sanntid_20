@@ -5,7 +5,6 @@ import (
 	"project/slave/cabfile"
 	"project/slave/elevator"
 	"project/slave/elevio"
-	"project/slave/iodevice"
 )
 
 type DirnBehaviourPair struct {
@@ -17,8 +16,8 @@ func requestsAbove(e elevator.Elevator) bool {
 	if e.Floor == -1 {
 		return false
 	}
-	for f := e.Floor + 1; f < iodevice.N_FLOORS; f++ {
-		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
+	for f := e.Floor + 1; f < elevator.N_FLOORS; f++ {
+		for btn := 0; btn < elevator.N_BUTTONS; btn++ {
 			if e.Requests[f][btn] != 0 {
 				return true
 			}
@@ -32,7 +31,7 @@ func requestsBelow(e elevator.Elevator) bool {
 		return false
 	}
 	for f := 0; f < e.Floor; f++ {
-		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
+		for btn := 0; btn < elevator.N_BUTTONS; btn++ {
 			if e.Requests[f][btn] != 0 {
 				return true
 			}
@@ -45,7 +44,7 @@ func requestsHere(e elevator.Elevator) bool {
 	if e.Floor == -1 {
 		return false
 	}
-	for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
+	for btn := 0; btn < elevator.N_BUTTONS; btn++ {
 		if e.Requests[e.Floor][btn] != 0 {
 			return true
 		}

@@ -4,9 +4,11 @@ import (
 	"project/mscomm"
 	"project/rblog"
 	"project/slave/elevio"
-	"project/slave/iodevice"
 	"time"
 )
+
+const N_FLOORS = 4
+const N_BUTTONS = 3
 
 type ElevatorBehaviour string
 
@@ -21,15 +23,30 @@ type Elevator struct {
 	Dirn       elevio.MotorDirection
 	Obstructed bool
 	DoorTimer  time.Timer
-	Requests   [iodevice.N_FLOORS][iodevice.N_BUTTONS]int
+	Requests   [N_FLOORS][N_BUTTONS]int
 	HallLights mscomm.Lights
 	Behaviour  ElevatorBehaviour
 	Config     Config
 }
 
 type Config struct {
-	DoorOpenDuration      time.Duration
+	DoorOpenDuration        time.Duration
 	InbetweenFloorsDuration time.Duration
+}
+
+func Initialize() Elevator {
+	return Elevator{
+		Floor:      -1,
+		Dirn:       elevio.MD_Stop,
+		Obstructed: false,
+		DoorTimer:  *time.NewTimer(-1),
+		Behaviour:  EB_Idle,
+		Config: Config{
+			DoorOpenDuration:        3 * time.Second,
+			InbetweenFloorsDuration: 10 * time.Second,
+		},
+		HallLights: mscomm.Lights{{false, false}, {false, false}, {false, false}, {false, false}},
+	}
 }
 
 func (es *Elevator) Print() {
@@ -39,15 +56,15 @@ func (es *Elevator) Print() {
 			"  |dirn  = %-12.12s|\n"+
 			"  |behav = %-12.12s|\n",
 		es.Floor,
-		iodevice.ElevioDirnToString(es.Dirn),
+		dirnToString(es.Dirn),
 		es.Behaviour,
 	)
 	rblog.White.Println("  +--------------------+")
 	rblog.White.Println("  |  | up  | dn  | cab |")
-	for f := iodevice.N_FLOORS - 1; f >= 0; f-- {
+	for f := N_FLOORS - 1; f >= 0; f-- {
 		rblog.White.Printf("  | %d", f)
-		for btn := 0; btn < iodevice.N_BUTTONS; btn++ {
-			if (f == iodevice.N_FLOORS-1 && btn == int(elevio.BT_HallUp)) ||
+		for btn := 0; btn < N_BUTTONS; btn++ {
+			if (f == N_FLOORS-1 && btn == int(elevio.BT_HallUp)) ||
 				(f == 0 && btn == elevio.BT_HallDown) {
 				rblog.White.Print("|     ")
 			} else {
@@ -64,17 +81,15 @@ func (es *Elevator) Print() {
 	rblog.White.Println("  +--------------------+")
 }
 
-func Initialize() Elevator {
-	return Elevator{
-		Floor:      -1,
-		Dirn:       elevio.MD_Stop,
-		Obstructed: false,
-		DoorTimer:  *time.NewTimer(-1),
-		Behaviour:  EB_Idle,
-		Config: Config{
-			DoorOpenDuration:      3 * time.Second,
-			InbetweenFloorsDuration: 10 * time.Second,
-		},
-		HallLights: mscomm.Lights{{false, false}, {false, false}, {false, false}, {false, false}},
+func dirnToString(d elevio.MotorDirection) string {
+	switch d {
+	case elevio.MD_Up:
+		return "up"
+	case elevio.MD_Down:
+		return "down"
+	case elevio.MD_Stop:
+		return "stop"
+	default:
+		return "UNDEFINED"
 	}
 }

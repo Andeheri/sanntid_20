@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"project/rblog"
-	"project/slave/iodevice"
+	"project/slave/elevator"
 	"runtime"
 	"strconv"
 )
@@ -28,11 +28,11 @@ func Read() []int {
 	}
 	// Read from primary file
 	fileData, err := os.ReadFile(cabsMain)
-	if err != nil || len(string(fileData)) != iodevice.N_FLOORS {
+	if err != nil || len(string(fileData)) != elevator.N_FLOORS {
 		rblog.Red.Println("Error reading from primary file:", err)
 		// Try reading from backup file
 		fileData, err = os.ReadFile(cabsBackup)
-		if err != nil || len(string(fileData)) != iodevice.N_FLOORS {
+		if err != nil || len(string(fileData)) != elevator.N_FLOORS {
 			rblog.Red.Println("Error reading from backup file:", err)
 			return allCabs
 		}

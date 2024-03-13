@@ -5,18 +5,15 @@ import (
 	"project/slave/cabfile"
 	"project/slave/elevator"
 	"project/slave/elevio"
-	"project/slave/iodevice"
 	"project/slave/requests"
 	"time"
 )
 
 var Elev elevator.Elevator = elevator.Initialize()
-var outputDevice iodevice.ElevOutputDevice
 
 func Init(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
-	outputDevice = iodevice.ElevioGetOutputDevice()
 
-	outputDevice.MotorDirection(elevio.MD_Stop)
+	elevio.SetMotorDirection(elevio.MD_Stop)
 	Elev.Dirn = elevio.MD_Stop
 	Elev.Behaviour = elevator.EB_Idle
 
@@ -24,13 +21,13 @@ func Init(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestC
 	Elev.Floor = floor
 	// Code for fixing starting position between floors
 	if floor == -1 {
-		outputDevice.MotorDirection(elevio.MD_Down)
+		elevio.SetMotorDirection(elevio.MD_Down)
 		Elev.Dirn = elevio.MD_Down
 		Elev.Behaviour = elevator.EB_Moving
 	}
 
 	cabRequests := cabfile.Read()
-	for floor := 0; floor < iodevice.N_FLOORS; floor++ {
+	for floor := 0; floor < elevator.N_FLOORS; floor++ {
 		if cabRequests[floor] != 0 {
 			OnRequestButtonPress(floor, elevio.BT_Cab, doorTimer, inbetweenFloorsTimer, clearRequestCh)
 		}
@@ -38,17 +35,17 @@ func Init(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestC
 }
 
 func SetAllLights(es *elevator.Elevator) {
-	for floor := 0; floor < iodevice.N_FLOORS; floor++ {
+	for floor := 0; floor < elevator.N_FLOORS; floor++ {
 		for btn := elevio.ButtonType(0); btn < 2; btn++ {
-			outputDevice.RequestButtonLight(btn, floor, es.HallLights[floor][btn])
+			elevio.SetButtonLamp(btn, floor, es.HallLights[floor][btn])
 		}
 	}
-	for floor := 0; floor < iodevice.N_FLOORS; floor++ {
-		outputDevice.RequestButtonLight(elevio.BT_Cab, floor, es.Requests[floor][elevio.BT_Cab] != 0)
+	for floor := 0; floor < elevator.N_FLOORS; floor++ {
+		elevio.SetButtonLamp(elevio.BT_Cab, floor, es.Requests[floor][elevio.BT_Cab] != 0)
 	}
 }
 
-//TODO give better name
+// TODO give better name
 func OnRequestButtonPress(btnFloor int, btnType elevio.ButtonType, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
 
 	switch Elev.Behaviour {
@@ -81,11 +78,11 @@ func OnRequestButtonPress(btnFloor int, btnType elevio.ButtonType, doorTimer *ti
 		Elev.Behaviour = pair.Behaviour
 		switch pair.Behaviour {
 		case elevator.EB_DoorOpen:
-			outputDevice.DoorLight(true)
+			elevio.SetDoorOpenLamp(true)
 			doorTimer.Reset(Elev.Config.DoorOpenDuration)
 			Elev = requests.ClearAtCurrentFloor(Elev, clearRequestCh)
 		case elevator.EB_Moving:
-			outputDevice.MotorDirection(Elev.Dirn)
+			elevio.SetMotorDirection(Elev.Dirn)
 			if Elev.Dirn != elevio.MD_Stop {
 				inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
 			}
@@ -100,13 +97,13 @@ func OnRequestButtonPress(btnFloor int, btnType elevio.ButtonType, doorTimer *ti
 func OnFloorArrival(newFloor int, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
 	Elev.Floor = newFloor
 
-	outputDevice.FloorIndicator(Elev.Floor)
+	elevio.SetFloorIndicator(Elev.Floor)
 
 	switch Elev.Behaviour {
 	case elevator.EB_Moving:
 		if requests.ShouldStop(Elev) {
-			outputDevice.MotorDirection(elevio.MD_Stop)
-			outputDevice.DoorLight(true)
+			elevio.SetMotorDirection(elevio.MD_Stop)
+			elevio.SetDoorOpenLamp(true)
 			Elev = requests.ClearAtCurrentFloor(Elev, clearRequestCh)
 			doorTimer.Reset(Elev.Config.DoorOpenDuration)
 			SetAllLights(&Elev)
@@ -136,15 +133,15 @@ func OnDoorTimeout(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clea
 			SetAllLights(&Elev)
 
 		case elevator.EB_Moving:
-			outputDevice.DoorLight(false)
-			outputDevice.MotorDirection(elevio.MotorDirection(Elev.Dirn))
+			elevio.SetDoorOpenLamp(false)
+			elevio.SetMotorDirection(elevio.MotorDirection(Elev.Dirn))
 			if Elev.Dirn != elevio.MD_Stop {
 				inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
 			}
 
 		case elevator.EB_Idle:
-			outputDevice.DoorLight(false)
-			outputDevice.MotorDirection(elevio.MotorDirection(Elev.Dirn))
+			elevio.SetDoorOpenLamp(false)
+			elevio.SetMotorDirection(elevio.MotorDirection(Elev.Dirn))
 			if Elev.Dirn != elevio.MD_Stop {
 				inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
 			}
@@ -159,7 +156,7 @@ func OnObstruction(isObstructed bool) {
 
 func RequestsClearAll() {
 	for btn := 0; btn < 2; btn++ {
-		for floor := 0; floor < iodevice.N_FLOORS; floor++ {
+		for floor := 0; floor < elevator.N_FLOORS; floor++ {
 			Elev.Requests[floor][btn] = 0
 		}
 	}
@@ -167,7 +164,7 @@ func RequestsClearAll() {
 
 func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
 	for btn := 0; btn < 2; btn++ {
-		for floor := 0; floor < iodevice.N_FLOORS; floor++ {
+		for floor := 0; floor < elevator.N_FLOORS; floor++ {
 			if masterRequests[floor][btn] {
 				OnRequestButtonPress(floor, elevio.ButtonType(btn), doorTimer, inbetweenFloorsTimer, clearRequestCh)
 			}
@@ -176,9 +173,9 @@ func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Time
 }
 
 func getCabRequests() []bool {
-	cabRequests := make([]bool, iodevice.N_FLOORS)
+	cabRequests := make([]bool, elevator.N_FLOORS)
 	var btn elevio.ButtonType = elevio.BT_Cab
-	for floor := 0; floor < iodevice.N_FLOORS; floor++ {
+	for floor := 0; floor < elevator.N_FLOORS; floor++ {
 		if Elev.Requests[floor][btn] == 1 {
 			cabRequests[floor] = true
 		} else {
@@ -209,7 +206,7 @@ func setCabFile(btnFloor int) {
 		err = cabfile.Set(btnFloor)
 	}
 	if err != nil {
-		outputDevice.MotorDirection(elevio.MD_Stop)
+		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Cab data could not be set to file")
 	}
 }
