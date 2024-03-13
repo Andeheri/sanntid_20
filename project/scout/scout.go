@@ -1,13 +1,13 @@
 // Responsible for overlooking UDP, and reelecting master
+// Based on https://github.com/TTK4145/Network-go/tree/master/network/conn
 package scout
 
 import (
+	"bytes"
 	"fmt"
 	"net"
-	. "project/constants"
 	"project/rblog"
 	"project/scout/conn"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -22,14 +22,30 @@ type ToMSE struct {
 	IPAddressMap map[string]int
 }
 
-var localIP string = LoopbackIp
+type Role string
+
+const (
+	Master  Role = "master"
+	Slave   Role = "slave"
+)
+
+const (
+	udpPort                 int           = 23456
+	LoopbackIP              string        = "127.0.0.1"
+	broadcastAddr           string        = "255.255.255.255"
+	numKeepAlive            int           = 5 // Number of missed keep-alive messages missed before assumed offline
+	deltaTKeepAlive         time.Duration = 50 * time.Millisecond
+	deltaTSamplingKeepAlive time.Duration = 100 * time.Millisecond
+)
+
+var localIP string = LoopbackIP
 
 func LocalIP() (string, error) {
-	if localIP == LoopbackIp {
-		dialer := net.Dialer{Timeout: 500 * time.Millisecond} // Timeout duration
+	if localIP == LoopbackIP {
+		dialer := net.Dialer{Timeout: 500 * time.Millisecond}
 		conn, err := dialer.Dial("tcp4", "8.8.8.8:53")
 		if err != nil {
-			return LoopbackIp, err
+			return LoopbackIP, err
 		}
 		defer conn.Close()
 		localIP = strings.Split(conn.LocalAddr().String(), ":")[0]
@@ -41,14 +57,14 @@ func LocalIP() (string, error) {
 func RecieveUDP(recieve_broadcast_channel chan<- string) {
 	const bufSize = 1024
 
-	conn := conn.DialBroadcastUDP(UDPPort)
+	conn := conn.DialBroadcastUDP(udpPort)
 	defer conn.Close()
 
 	buff := make([]byte, bufSize)
 	for {
 		n, _, e := conn.ReadFrom(buff)
 		if e != nil {
-			rblog.Red.Printf("Error when recieving with UDP on port %d: \"%+v\"\n", UDPPort, e)
+			rblog.Red.Printf("Error when recieving with UDP on port %d: \"%+v\"\n", udpPort, e)
 			continue
 		}
 		recieved_message := string(buff[:n])
@@ -57,10 +73,12 @@ func RecieveUDP(recieve_broadcast_channel chan<- string) {
 }
 
 // Intended to run as a go-routine. Returns when bcastConn is closed.
+//
+// Sends keep-alive messages, and maybe trigger a reelection of master
 func SendKeepAliveMessage(deltaT time.Duration) {
-	// Sends keep-alive messages, updating all elevators that it is active, and maybe trigger a reelection of master
-	bcastConn := conn.DialBroadcastUDP(UDPPort)
-	bcastAddr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", BroadcastAddr, UDPPort))
+	bcastConn := conn.DialBroadcastUDP(udpPort)
+	bcastAddr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", broadcastAddr, udpPort))
+	failedLastBroadcast := false
 	defer bcastConn.Close()
 
 	for {
@@ -68,7 +86,12 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 		if err == nil {
 			_, e := bcastConn.WriteTo([]byte(localIP), bcastAddr)
 			if e != nil {
-				rblog.Red.Printf("Error when broadcasting: %+v", e)
+				if !failedLastBroadcast {
+					rblog.Red.Printf("Error when broadcasting: %+v", e)
+					failedLastBroadcast = true
+				}
+			} else { 
+				failedLastBroadcast = false
 			}
 		}
 		time.Sleep(deltaT)
@@ -78,16 +101,15 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 // Intended to run as a go-routine. Called from main.
 //
 // Responsible for keeping track of which elevators are alive, and elect master-slave configuration.
-func Start(deltaT time.Duration, numKeepAlive int, fromMSEChannel chan<- FromMSE) {
-	// Other go-routines
+func Start(fromMSEChannel chan<- FromMSE) {
+	// Initilization of scout
 	UDPRecieveChannel := make(chan string)
 
 	go RecieveUDP(UDPRecieveChannel)
-	go SendKeepAliveMessage(DeltaTKeepAlive)
+	go SendKeepAliveMessage(deltaTKeepAlive)
 	
-	// Init tracking keep-alive-messages and master slave election
-	knownIPMap := make(map[string]int)      // Known IP-addresses with number keeping track of 'aliveness'
-	timer := time.NewTicker(deltaT)       // Timer to check for keep-alive messages
+	knownIPMap := make(map[string]int) // Known IP-addresses with number keeping track of 'aliveness'
+	timer := time.NewTicker(deltaTSamplingKeepAlive) // Timer to check for keep-alive messages
 	hasChanged := false
 	defer timer.Stop()
 
@@ -95,7 +117,7 @@ func Start(deltaT time.Duration, numKeepAlive int, fromMSEChannel chan<- FromMSE
 	localIP, err := LocalIP()
 	if err != nil {
 		rblog.Red.Println("Error when getting local IP. Probably disconnected.")
-		fromMSEData, _ := masterSlaveElection(map[string]int{LoopbackIp: NumKeepAlive})
+		fromMSEData, _ := masterSlaveElection(map[string]int{LoopbackIP: numKeepAlive})
 		fromMSEChannel <- fromMSEData
 	} else {
 		rblog.Green.Printf("Local IP: %s", localIP)
@@ -105,10 +127,12 @@ func Start(deltaT time.Duration, numKeepAlive int, fromMSEChannel chan<- FromMSE
 		select {
 		case IPAddr := <-UDPRecieveChannel:
 			// Received keep alive message
-			_, exists := knownIPMap[IPAddr]
-			knownIPMap[IPAddr] = numKeepAlive
-			if !exists {
-				hasChanged = true
+			if net.ParseIP(IPAddr) != nil {  // Ensures that the string recieved is a valid IP address
+				_, exists := knownIPMap[IPAddr]
+				knownIPMap[IPAddr] = numKeepAlive
+				if !exists {
+					hasChanged = true
+				}
 			}
 		case <-timer.C:
 			for ip, count := range knownIPMap {
@@ -142,7 +166,7 @@ func masterSlaveElection(IPAddressMap map[string]int) (FromMSE, bool){
 
 	if masterIP != lastMasterIP {
 		rblog.Cyan.Println("--- Master Slave Election ---")
-		if masterIP == LoopbackIp {
+		if masterIP == LoopbackIP {
 			role = Master
 		} else {
 			role = Slave
@@ -154,51 +178,25 @@ func masterSlaveElection(IPAddressMap map[string]int) (FromMSE, bool){
 	}
 }
 
-// Finds masterIP by choosing the IP with the higest numerical value
+// Finds masterIP by choosing the IP with the highest numerical value
 func getMasterIP(IPAddressMap map[string]int) string{
-	rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
-	var highestIPInt int = 0
+	var highestIPInt []byte = []byte{0, 0, 0, 0}
 	var highestIPString string
 	if len(IPAddressMap) <= 1 { // Elevator is disconnected or alone
-		return LoopbackIp
+		return LoopbackIP
 	} else{
 		for ipAddress := range IPAddressMap {
-			ipAddressInt := IPToNum(ipAddress)
-			if ipAddressInt > highestIPInt {
+			ipAddressInt := net.ParseIP(ipAddress)
+			if bytes.Compare(ipAddressInt, highestIPInt) > 0{
 				highestIPString = ipAddress
 				highestIPInt = ipAddressInt
 			}
 		}
 		localIP, _ := LocalIP()
 		if highestIPString == localIP {  // To reduce number of reelections needed
-			return LoopbackIp
+			return LoopbackIP
 		} else{
 			return highestIPString
 		}
 	}
-}
-
-func IPToNum(ipAddress string) int {
-	ip_as_string := strings.Join(strings.Split(ipAddress, "."), "")
-	ip_as_num, err := strconv.Atoi(ip_as_string)
-	if err != nil {
-		rblog.Red.Printf("Error when casting IP address to num.\n")
-	}
-	return ip_as_num
-}
-
-func MakeDeepCopyMap[K comparable, V any](current_map map[K]V) map[K]V {
-	// Create deep copy
-	map_copy := make(map[K]V)
-	// Manually copy elements from the original map to the new map
-	for key, value := range current_map {
-		map_copy[key] = value
-	}
-	return map_copy
-}
-
-func SendMapToChannel[K comparable, V any](current_map map[K]V, channel chan<- map[K]V) {
-	map_copy := MakeDeepCopyMap[K, V](current_map)
-	// Passes updated list to see if new master should be elected
-	channel <- map_copy
 }
