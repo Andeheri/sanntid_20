@@ -30,8 +30,8 @@ func Start(masterAddressCh <-chan string) {
 	inbetweenFloorsTimer.Stop()
 	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
 
-	const watchDogTime = 1 * time.Second
-	watchDog := time.AfterFunc(watchDogTime, func() {
+	const watchDogTimeout = 1 * time.Second
+	watchDog := time.AfterFunc(watchDogTimeout, func() {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Watchdog timeout on slave")
 	})
@@ -69,9 +69,9 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-fromMasterCh:
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer, inbetweenFloorsTimer)
 
-		case <-time.After(watchDogTime / 5):
+		case <-time.After(watchDogTimeout / 5):
 		}
 
-		watchDog.Reset(watchDogTime)
+		watchDog.Reset(watchDogTimeout)
 	}
 }
