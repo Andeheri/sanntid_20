@@ -29,7 +29,7 @@ func Init(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestC
 	cabRequests := cabfile.Read()
 	for floor := 0; floor < elevator.N_FLOORS; floor++ {
 		if cabRequests[floor] != 0 {
-			OnRequestButtonPress(floor, elevio.BT_Cab, doorTimer, inbetweenFloorsTimer, clearRequestCh)
+			OnRequestOrder(floor, elevio.BT_Cab, doorTimer, inbetweenFloorsTimer, clearRequestCh)
 		}
 	}
 }
@@ -45,8 +45,7 @@ func SetAllLights(es *elevator.Elevator) {
 	}
 }
 
-// TODO give better name
-func OnRequestButtonPress(btnFloor int, btnType elevio.ButtonType, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
+func OnRequestOrder(btnFloor int, btnType elevio.ButtonType, doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clearRequestCh chan<- interface{}) {
 
 	switch Elev.Behaviour {
 	case elevator.EB_DoorOpen:
@@ -166,7 +165,7 @@ func RequestsSetAll(masterRequests mscomm.AssignedRequests, doorTimer *time.Time
 	for btn := 0; btn < 2; btn++ {
 		for floor := 0; floor < elevator.N_FLOORS; floor++ {
 			if masterRequests[floor][btn] {
-				OnRequestButtonPress(floor, elevio.ButtonType(btn), doorTimer, inbetweenFloorsTimer, clearRequestCh)
+				OnRequestOrder(floor, elevio.ButtonType(btn), doorTimer, inbetweenFloorsTimer, clearRequestCh)
 			}
 		}
 	}

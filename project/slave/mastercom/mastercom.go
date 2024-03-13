@@ -21,8 +21,8 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 	masterDisconnectCh := make(chan mscomm.ConnectionEvent)
 	senderQuitCh := make(chan struct{})
 
-	var reconnectDelay time.Duration = 50 * time.Millisecond
-	var dialTimeout time.Duration = 100 * time.Millisecond
+	const reconnectDelay time.Duration = 50 * time.Millisecond
+	const dialTimeout time.Duration = 100 * time.Millisecond
 
 	connAttempt := time.NewTimer(reconnectDelay)
 	connAttempt.Stop()

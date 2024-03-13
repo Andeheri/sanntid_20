@@ -3,6 +3,7 @@ package slave
 import (
 	"project/mscomm"
 	"project/rblog"
+	"project/slave/elevator"
 	"project/slave/elevio"
 	"project/slave/fsm"
 	"project/slave/mastercom"
@@ -10,9 +11,7 @@ import (
 )
 
 func Start(masterAddressCh <-chan string) {
-	numFloors := 4
-
-	elevio.Init("localhost:15657", numFloors)
+	elevio.Init("localhost:15657", elevator.N_FLOORS)
 
 	drvButtonsCh := make(chan elevio.ButtonEvent)
 	drvFloorsCh := make(chan int)
@@ -31,7 +30,7 @@ func Start(masterAddressCh <-chan string) {
 	inbetweenFloorsTimer.Stop()
 	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
 
-	watchDogTime := 1 * time.Second
+	const watchDogTime = 1 * time.Second
 	watchDog := time.AfterFunc(watchDogTime, func() {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Watchdog timeout on slave")
@@ -44,7 +43,7 @@ func Start(masterAddressCh <-chan string) {
 		select {
 		case a := <-drvButtonsCh:
 			if a.Button == elevio.BT_Cab {
-				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
+				fsm.OnRequestOrder(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
 				senderCh <- fsm.GetState()
 			} else {
 				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}

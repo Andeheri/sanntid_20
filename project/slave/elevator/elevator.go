@@ -65,7 +65,7 @@ func (es *Elevator) Print() {
 		rblog.White.Printf("  | %d", f)
 		for btn := 0; btn < N_BUTTONS; btn++ {
 			if (f == N_FLOORS-1 && btn == int(elevio.BT_HallUp)) ||
-				(f == 0 && btn == elevio.BT_HallDown) {
+				(f == 0 && btn == int(elevio.BT_HallDown)) {
 				rblog.White.Print("|     ")
 			} else {
 				rblog.White.Print(func() string {
