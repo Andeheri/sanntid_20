@@ -29,10 +29,6 @@ RUN sed -i 's/\r$//' ./start.sh  && \
 ADD https://github.com/TTK4145/Simulator-v2/releases/download/v1.5/SimElevatorServer ./simulator
 RUN chmod +x simulator
 
-# Add packetloss 
-ADD https://github.com/TTK4145/Project-resources/releases/download/v1.1.1/packetloss ./packetloss
-RUN chmod +x packetloss
-
 # Add the source code
 COPY . .
 RUN go build -o app main.go
