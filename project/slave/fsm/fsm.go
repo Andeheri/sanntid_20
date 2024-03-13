@@ -230,9 +230,9 @@ func getCabRequests() []bool {
 func GetState() mscomm.ElevatorState {
 	behavior := string(Elev.Behaviour)
 	//should not be part of hall assignment when blocked
-	if Elev.Obstructed || Elev.Floor == -1 {
-		behavior = "blocked"
-	}
+	// if Elev.Obstructed || Elev.Floor == -1 {
+	// 	behavior = "blocked"
+	// }
 	state := mscomm.ElevatorState{
 		Behavior:    behavior,
 		Floor:       Elev.Floor,
