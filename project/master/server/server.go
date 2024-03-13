@@ -40,7 +40,7 @@ func Acceptor(listener *net.TCPListener, fromSlaveCh chan mscomm.Package, connec
 			//listener closed. Terminating
 			return
 		}
-		//TODO: set Keepalive period and timeout.
+
 		slaveAddr := slaveConn.RemoteAddr().String()
 
 		toSlaveCh := make(chan interface{})

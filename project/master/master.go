@@ -63,7 +63,7 @@ var logfile, _ = os.OpenFile("masterlog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONL
 var flog = log.New(logfile, "master: ", log.Ltime|log.Lmicroseconds|log.Lshortfile)
 
 // Run as a goroutine. Will start to quit after something is sent on quitCh or if it closes
-func Run(masterPort int, quitCh chan struct{}) {
+func Start(masterPort int, quitCh chan struct{}) {
 
 	rblog.Magenta.Print("--- Starting master ---")
 	flog.Println("[INFO] Starting master")
@@ -242,8 +242,12 @@ func Run(masterPort int, quitCh chan struct{}) {
 				}
 
 				syncRequests := mscomm.SyncRequests{
-					Requests: m.hallRequests, //TODO: copy
+					Requests: make(mscomm.HallRequests, floorCount),
 					Id:       syncId,
+				}
+				for i := range m.hallRequests {
+					syncRequests.Requests[i][0] = m.hallRequests[i][0]
+					syncRequests.Requests[i][1] = m.hallRequests[i][1]
 				}
 				syncRequests.Requests[buttonPressed.Floor][buttonPressed.Button] = true
 
@@ -313,7 +317,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				if len(m.syncAttempts[syncId].pendingSlaves) == 0 {
 					//sync successful
 					flog.Println("[INFO] sync was successful")
-					m.hallRequests.Set(m.syncAttempts[syncId].button)
+					m.hallRequests[m.syncAttempts[syncId].button.Floor][m.syncAttempts[syncId].button.Button] = true
 					m.shareLights()
 					delete(m.syncAttempts, syncId)
 					m.collectStates()
@@ -397,7 +401,7 @@ func (m *master) assignHallRequests() {
 		flog.Println("[WARNING] Noone to assign to")
 		return
 	}
-	//TODO: fix deadlock that occurs right about here - when running assigner executable
+
 	flog.Println("[INFO] starting assigner executable")
 	assignedRequests, err := assigner.Assign(&assignerInput)
 	if err != nil {

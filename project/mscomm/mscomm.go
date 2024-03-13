@@ -39,15 +39,7 @@ func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
 	return nil
 }
 
-func (hr *HallRequests) Set(btn ButtonPressed) {
-	(*hr)[btn.Floor][btn.Button] = true
-}
-
-func (hr *HallRequests) Clear(order OrderComplete) {
-	(*hr)[order.Floor][order.Button] = false
-}
-
-func (ar *AssignedRequests)IsEmpty() bool {
+func (ar *AssignedRequests) IsEmpty() bool {
 	for _, floor := range *ar {
 		for _, button := range floor {
 			if button {
@@ -168,7 +160,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 }
 
 // Intended to run as a goroutine.
-// Returns only when sending something on quitCh.
+// Returns when sending something on quitCh or closing quitCh.
 func TCPSender(conn *net.TCPConn, ch <-chan interface{}, quitCh <-chan struct{}) {
 
 	defer conn.Close()
