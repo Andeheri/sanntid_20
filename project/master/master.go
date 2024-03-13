@@ -45,7 +45,7 @@ const (
 	syncTimeout          time.Duration = 500 * time.Millisecond
 	watchdogTimeout      time.Duration = 1000 * time.Millisecond
 	watchdogResetPeriod  time.Duration = 300 * time.Millisecond
-	orderCompleteTimeout time.Duration = 20 * time.Second
+	orderCompleteTimeout time.Duration = 15 * time.Second
 	sickLeaveDuration    time.Duration = 30 * time.Second
 	terminationDelay     time.Duration = 100 * time.Millisecond
 	floorCount           int           = 4
