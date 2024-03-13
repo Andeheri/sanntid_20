@@ -6,7 +6,6 @@ import (
 )
 
 func main() {
-	// initialMasterAddress := "10.100.23.192:12221"
 	initialMasterAddress := "127.0.0.1:11000"
 	masterAddressCh := make(chan string)
 

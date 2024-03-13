@@ -71,7 +71,7 @@ func Start(masterAddressCh <-chan string) {
 
 		case <-time.After(watchDogTimeout / 5):
 		}
-
+		
 		watchDog.Reset(watchDogTimeout)
 	}
 }

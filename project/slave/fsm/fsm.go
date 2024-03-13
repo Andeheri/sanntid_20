@@ -1,3 +1,4 @@
+//Based on https://github.com/TTK4145/Project-resources/tree/master/elev_algo
 package fsm
 
 import (
@@ -88,7 +89,6 @@ func OnRequestOrder(btnFloor int, btnType elevio.ButtonType, doorTimer *time.Tim
 		case elevator.EB_Idle:
 
 		}
-
 	}
 	SetAllLights(&Elev)
 }
@@ -144,7 +144,6 @@ func OnDoorTimeout(doorTimer *time.Timer, inbetweenFloorsTimer *time.Timer, clea
 			if Elev.Dirn != elevio.MD_Stop {
 				inbetweenFloorsTimer.Reset(Elev.Config.InbetweenFloorsDuration)
 			}
-
 		}
 	}
 }

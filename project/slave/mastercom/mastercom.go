@@ -15,6 +15,7 @@ var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {fals
 var TCPSendTimeOut time.Duration = 100 * time.Millisecond
 
 func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromMasterCh chan<- mscomm.Package) {
+	
 	var currentMasterAddress string
 	var masterConn *net.TCPConn
 	var attempts int = 0
