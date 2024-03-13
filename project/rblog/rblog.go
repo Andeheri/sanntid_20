@@ -33,6 +33,7 @@ var rainbowSequence = []string{"\033[1;37;41m", "\033[1;30;43m", "\033[1;30;42m"
 
 var std = log.New(os.Stdout, "", log.Ltime|log.Lshortfile)
 
+
 func Print(v ...any) {
 	std.Output(2, fmt.Sprint(v...))
 }

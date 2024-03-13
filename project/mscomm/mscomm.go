@@ -47,6 +47,17 @@ func (hr *HallRequests) Clear(order OrderComplete) {
 	(*hr)[order.Floor][order.Button] = false
 }
 
+func (ar *AssignedRequests)IsEmpty() bool {
+	for _, floor := range *ar {
+		for _, button := range floor {
+			if button {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 type SyncRequests struct {
 	Requests HallRequests
 	Id       int
@@ -58,22 +69,6 @@ type SyncOK struct {
 
 type RequestState struct{}
 type RequestHallRequests struct{}
-
-type MISOChBundle struct {
-	HallRequests  chan HallRequests
-	ElevatorState chan ElevatorState
-	ButtonPressed chan ButtonPressed
-	OrderComplete chan OrderComplete
-	SyncOK        chan SyncOK
-}
-
-type MOSIChBundle struct {
-	RequestHallRequests chan RequestHallRequests
-	RequestState        chan RequestState
-	UpdateOrders        chan HallRequests
-	UpdateLights        chan Lights
-	AssignedRequests    chan AssignedRequests
-}
 
 type TypeTaggedJSON struct {
 	TypeId string

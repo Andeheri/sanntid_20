@@ -20,6 +20,7 @@ type slaveType struct {
 	statePending       bool
 	assignedRequests   mscomm.AssignedRequests
 	orderCompleteTimer *time.Timer
+	elevatorState      mscomm.ElevatorState
 }
 
 type syncAttemptType struct {
@@ -29,7 +30,7 @@ type syncAttemptType struct {
 
 type master struct {
 	slaves                 map[string]*slaveType
-	communityState         assigner.CommunityState
+	hallRequests           mscomm.HallRequests
 	syncAttempts           map[int]syncAttemptType
 	applicationTimeoutCh   chan string
 	syncTimeoutCh          chan int
@@ -101,12 +102,15 @@ func Run(masterPort int, quitCh chan struct{}) {
 					ch:               event.Ch,
 					quitCh:           event.QuitCh,
 					employmentStatus: sesApplicant,
+					assignedRequests: make(mscomm.AssignedRequests, floorCount),
 					orderCompleteTimer: time.AfterFunc(orderCompleteTimeout, func() {
 						m.orderCompleteTimeoutCh <- event.Addr
 					}),
-					assignedRequests: make(mscomm.AssignedRequests, floorCount),
 				}
 				m.slaves[event.Addr].orderCompleteTimer.Stop()
+
+				//assume blocked until slave reports otherwise
+				m.slaves[event.Addr].elevatorState.Behavior = "blocked"
 
 				go func() {
 					time.Sleep(applicationTimeout)
@@ -156,20 +160,23 @@ func Run(masterPort int, quitCh chan struct{}) {
 			}
 			m.assignHallRequests()
 		case addr := <-m.orderCompleteTimeoutCh:
-			if _, exists := m.slaves[addr]; exists {
+			if slave, exists := m.slaves[addr]; exists {
+				if slave.elevatorState.Behavior == "blocked" {
+					//slave has reported a reason why it did not complete the order. No sick leave for you
+					continue
+				}
 				rblog.Yellow.Println("slave did not complete order in time:", addr)
 				flog.Println("[WARNING] slave did not complete order in time:", addr)
-				m.slaves[addr].employmentStatus = sesOnSickLeave
+				slave.employmentStatus = sesOnSickLeave
 				go func() {
 					time.Sleep(sickLeaveDuration)
 					m.sickLeaveTimeoutCh <- addr
-					delete(m.communityState.States, addr)
 				}()
 			}
 		case addr := <-m.sickLeaveTimeoutCh:
-			if _, exists := m.slaves[addr]; exists {
+			if slave, exists := m.slaves[addr]; exists {
 				rblog.Magenta.Println("slave back from sick leave:", addr)
-				m.slaves[addr].employmentStatus = sesHired
+				slave.employmentStatus = sesHired
 				m.collectStates()
 			}
 		case <-quitCh:
@@ -199,9 +206,9 @@ func Run(masterPort int, quitCh chan struct{}) {
 			case mscomm.HallRequests:
 				//Slave is hired!
 				slaveHallRequests := message.Payload.(mscomm.HallRequests)
-				m.communityState.HallRequests.Merge(&slaveHallRequests)
+				m.hallRequests.Merge(&slaveHallRequests)
 				m.slaves[message.Addr].employmentStatus = sesHired
-				m.slaves[message.Addr].ch <- mscomm.Lights(m.communityState.HallRequests)
+				m.slaves[message.Addr].ch <- mscomm.Lights(m.hallRequests)
 				rblog.Magenta.Println("slave hired:", message.Addr)
 				flog.Println("[INFO] slave hired:", message.Addr)
 
@@ -235,7 +242,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				}
 
 				syncRequests := mscomm.SyncRequests{
-					Requests: m.communityState.HallRequests, //TODO: copy
+					Requests: m.hallRequests, //TODO: copy
 					Id:       syncId,
 				}
 				syncRequests.Requests[buttonPressed.Floor][buttonPressed.Button] = true
@@ -256,12 +263,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 			case mscomm.ElevatorState:
 				flog.Println("[INFO] received elevatorstate from", message.Addr)
 				elevState := message.Payload.(mscomm.ElevatorState)
-				if elevState.Behavior == "blocked" {
-					delete(m.communityState.States, message.Addr)
-					m.slaves[message.Addr].orderCompleteTimer.Stop()
-				} else {
-					m.communityState.States[message.Addr] = elevState
-				}
+				m.slaves[message.Addr].elevatorState = elevState
 				m.slaves[message.Addr].statePending = false
 
 				anyonePending := false
@@ -280,7 +282,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 			case mscomm.OrderComplete:
 				orderComplete := message.Payload.(mscomm.OrderComplete)
 				flog.Println("[INFO]", message.Addr, "completed order:", orderComplete)
-				m.communityState.HallRequests[orderComplete.Floor][orderComplete.Button] = false
+				m.hallRequests[orderComplete.Floor][orderComplete.Button] = false
 				m.shareLights()
 
 				m.slaves[message.Addr].assignedRequests[orderComplete.Floor][orderComplete.Button] = false
@@ -311,7 +313,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 				if len(m.syncAttempts[syncId].pendingSlaves) == 0 {
 					//sync successful
 					flog.Println("[INFO] sync was successful")
-					m.communityState.HallRequests.Set(m.syncAttempts[syncId].button)
+					m.hallRequests.Set(m.syncAttempts[syncId].button)
 					m.shareLights()
 					delete(m.syncAttempts, syncId)
 					m.collectStates()
@@ -332,8 +334,7 @@ func Run(masterPort int, quitCh chan struct{}) {
 
 func (m *master) init() {
 	m.slaves = make(map[string]*slaveType)
-	m.communityState.HallRequests = make(mscomm.HallRequests, floorCount)
-	m.communityState.States = make(map[string]mscomm.ElevatorState)
+	m.hallRequests = make(mscomm.HallRequests, floorCount)
 	m.syncAttempts = make(map[int]syncAttemptType)
 
 	m.applicationTimeoutCh = make(chan string)
@@ -348,12 +349,11 @@ func (m *master) init() {
 
 func (m *master) dismiss(addr string) {
 	flog.Println("[INFO] Dismissing", addr)
-	if _, exists := m.slaves[addr]; exists {
-		m.slaves[addr].quitCh <- struct{}{}
-		m.slaves[addr].orderCompleteTimer.Stop()
+	if slave, exists := m.slaves[addr]; exists {
+		slave.quitCh <- struct{}{}
+		slave.orderCompleteTimer.Stop()
 		delete(m.slaves, addr)
 	}
-	delete(m.communityState.States, addr)
 }
 
 func (m *master) collectStates() {
@@ -372,21 +372,34 @@ func (m *master) shareLights() {
 	for addr, slave := range m.slaves {
 		if slave.employmentStatus == sesHired || slave.employmentStatus == sesOnSickLeave {
 			flog.Println("[INFO] distributing lights to", addr)
-			slave.ch <- mscomm.Lights(m.communityState.HallRequests)
+			slave.ch <- mscomm.Lights(m.hallRequests)
 		}
 	}
 }
 
 func (m *master) assignHallRequests() {
+
 	flog.Println("[INFO] ready to assign")
-	if len(m.communityState.States) == 0 {
+
+	assignerInput := assigner.AssignerInput{
+		HallRequests: m.hallRequests,
+		States:       make(map[string]mscomm.ElevatorState),
+	}
+
+	for addr, slave := range m.slaves {
+		if slave.employmentStatus == sesHired && slave.elevatorState.Behavior != "blocked" {
+			assignerInput.States[addr] = slave.elevatorState
+		}
+	}
+
+	if len(assignerInput.States) == 0 {
 		rblog.Yellow.Println("Noone to assign to")
 		flog.Println("[WARNING] Noone to assign to")
 		return
 	}
 	//TODO: fix deadlock that occurs right about here - when running assigner executable
 	flog.Println("[INFO] starting assigner executable")
-	assignedRequests, err := assigner.Assign(&m.communityState)
+	assignedRequests, err := assigner.Assign(&assignerInput)
 	if err != nil {
 		rblog.Red.Println("assigner error:", err)
 		flog.Println("assigner error:", err)
@@ -398,6 +411,11 @@ func (m *master) assignHallRequests() {
 		flog.Println("[INFO]", addr, "got assigned", requests)
 		m.slaves[addr].ch <- requests
 		m.slaves[addr].assignedRequests = requests
-		m.slaves[addr].orderCompleteTimer.Reset(orderCompleteTimeout)
+		if requests.IsEmpty() {
+			m.slaves[addr].orderCompleteTimer.Stop()
+		} else {
+			m.slaves[addr].orderCompleteTimer.Reset(orderCompleteTimeout)
+		}
+
 	}
 }

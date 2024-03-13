@@ -9,7 +9,7 @@ import (
 	"runtime"
 )
 
-type CommunityState struct {
+type AssignerInput struct {
 	HallRequests mscomm.HallRequests             `json:"hallRequests"`
 	States       map[string]mscomm.ElevatorState `json:"states"`
 }
@@ -18,7 +18,7 @@ var assignerExecutable string = ""
 
 // Based on https://github.com/TTK4145/Project-resources/blob/master/cost_fns/usage_examples/example.go
 // hall_request_assigner from https://github.com/TTK4145/Project-resources/releases/tag/v1.1.1
-func Assign(state *CommunityState) (*map[string]mscomm.AssignedRequests, error) {
+func Assign(state *AssignerInput) (*map[string]mscomm.AssignedRequests, error) {
 
 	if assignerExecutable == "" {
 		_, filename, _, ok := runtime.Caller(0)
