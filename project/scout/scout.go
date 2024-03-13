@@ -1,3 +1,4 @@
+// Responsible for overlooking UDP, and reelecting master
 package scout
 
 import (
@@ -36,7 +37,8 @@ func LocalIP() (string, error) {
 	return localIP, nil
 }
 
-func ListenUDP(recieve_broadcast_channel chan<- string) {
+// Intended to run as a go-routine. Returns when conn is closed.
+func RecieveUDP(recieve_broadcast_channel chan<- string) {
 	const bufSize = 1024
 
 	conn := conn.DialBroadcastUDP(UDPPort)
@@ -54,6 +56,7 @@ func ListenUDP(recieve_broadcast_channel chan<- string) {
 	}
 }
 
+// Intended to run as a go-routine. Returns when bcastConn is closed.
 func SendKeepAliveMessage(deltaT time.Duration) {
 	// Sends keep-alive messages, updating all elevators that it is active, and maybe trigger a reelection of master
 	bcastConn := conn.DialBroadcastUDP(UDPPort)
@@ -72,7 +75,17 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 	}
 }
 
-func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, UDPRecieveChannel <-chan string, fromMSEChannel chan<- FromMSE) {
+// Intended to run as a go-routine. Called from main.
+//
+// Responsible for keeping track of which elevators are alive, and elect master-slave configuration.
+func Start(deltaT time.Duration, numKeepAlive int, fromMSEChannel chan<- FromMSE) {
+	// Other go-routines
+	UDPRecieveChannel := make(chan string)
+
+	go RecieveUDP(UDPRecieveChannel)
+	go SendKeepAliveMessage(DeltaTKeepAlive)
+	
+	// Init tracking keep-alive-messages and master slave election
 	knownIPMap := make(map[string]int)      // Known IP-addresses with number keeping track of 'aliveness'
 	timer := time.NewTicker(deltaT)       // Timer to check for keep-alive messages
 	hasChanged := false
@@ -82,7 +95,8 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 	localIP, err := LocalIP()
 	if err != nil {
 		rblog.Red.Println("Error when getting local IP. Probably disconnected.")
-		masterSlaveElection(fromMSEChannel, map[string]int{LoopbackIp: NumKeepAlive})
+		fromMSEData, _ := masterSlaveElection(map[string]int{LoopbackIp: NumKeepAlive})
+		fromMSEChannel <- fromMSEData
 	} else {
 		rblog.Green.Printf("Local IP: %s", localIP)
 	}
@@ -108,7 +122,10 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 			}
 			// Check if master-slave-configuration needs to be updated
 			if hasChanged {
-				masterSlaveElection(fromMSEChannel, knownIPMap)
+				fromMSEData, isNewMaster := masterSlaveElection(knownIPMap)
+				if isNewMaster {
+					fromMSEChannel <- fromMSEData
+				}
 			}
 			hasChanged = false
 		}
@@ -117,7 +134,7 @@ func TrackMissedKeepAliveMessagesAndMSE(deltaT time.Duration, numKeepAlive int, 
 
 var lastMasterIP string
 
-func masterSlaveElection(mseCh chan<- FromMSE, IPAddressMap map[string]int) {
+func masterSlaveElection(IPAddressMap map[string]int) (FromMSE, bool){
 	rblog.Yellow.Printf("Current active IP's: %+v\n", IPAddressMap)
 
 	role := Slave
@@ -131,7 +148,9 @@ func masterSlaveElection(mseCh chan<- FromMSE, IPAddressMap map[string]int) {
 			role = Slave
 		}
 		lastMasterIP = masterIP
-		mseCh <- FromMSE{ElevatorRole: role, MasterIP: masterIP}
+		return FromMSE{ElevatorRole: role, MasterIP: masterIP}, true
+	} else {
+		return FromMSE{}, false
 	}
 }
 
