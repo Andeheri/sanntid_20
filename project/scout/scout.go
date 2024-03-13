@@ -57,10 +57,12 @@ func RecieveUDP(recieve_broadcast_channel chan<- string) {
 }
 
 // Intended to run as a go-routine. Returns when bcastConn is closed.
+//
+// Sends keep-alive messages, and maybe trigger a reelection of master
 func SendKeepAliveMessage(deltaT time.Duration) {
-	// Sends keep-alive messages, updating all elevators that it is active, and maybe trigger a reelection of master
 	bcastConn := conn.DialBroadcastUDP(UDPPort)
 	bcastAddr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", BroadcastAddr, UDPPort))
+	failedLastBroadcast := false
 	defer bcastConn.Close()
 
 	for {
@@ -68,7 +70,12 @@ func SendKeepAliveMessage(deltaT time.Duration) {
 		if err == nil {
 			_, e := bcastConn.WriteTo([]byte(localIP), bcastAddr)
 			if e != nil {
-				rblog.Red.Printf("Error when broadcasting: %+v", e)
+				if !failedLastBroadcast {
+					rblog.Red.Printf("Error when broadcasting: %+v", e)
+					failedLastBroadcast = true
+				}
+			} else { 
+				failedLastBroadcast = false
 			}
 		}
 		time.Sleep(deltaT)
