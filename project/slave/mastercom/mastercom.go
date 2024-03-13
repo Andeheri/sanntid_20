@@ -47,7 +47,7 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 			}
 
 		case <-connAttempt.C:
-			rblog.White.Println("Attempting dialing to connect to master")
+			rblog.White.Println("Attempt at dialing to connect to master")
 			conn, err := net.DialTimeout("tcp4", currentMasterAddress, dialTimeout)
 			if err == nil {
 				rblog.White.Println("Connected to master")
