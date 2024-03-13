@@ -27,16 +27,11 @@ func main() {
 	masterIP := LoopbackIp // Default is loopback address
 
 	// Channels
-	recieveUDPChannel := make(chan string)
 	fromMSEChannel := make(chan scout.FromMSE)
 	masterAddressChannel := make(chan string)
 	masterQuitChannel := make(chan struct{})
-
-	// Start all go-threads
-	go scout.ListenUDP(recieveUDPChannel)
-	go scout.SendKeepAliveMessage(DeltaTKeepAlive)
-	go scout.TrackMissedKeepAliveMessagesAndMSE(DeltaTSamplingKeepAlive, NumKeepAlive, recieveUDPChannel, fromMSEChannel)
-
+	
+	go scout.Start(DeltaTSamplingKeepAlive, NumKeepAlive, fromMSEChannel)
 	go slave.Start(masterAddressChannel)
 
 	lastRole := Slave
