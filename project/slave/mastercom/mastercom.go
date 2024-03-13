@@ -32,7 +32,6 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 		select {
 		case newMasterAddress := <-masterAddressCh:
 			if newMasterAddress != currentMasterAddress {
-				rblog.White.Println("Master address changed to:", newMasterAddress)
 				currentMasterAddress = newMasterAddress
 				if masterConn != nil {
 					masterConn.Close()
@@ -43,15 +42,13 @@ func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromM
 		case disconnect := <-masterDisconnectCh:
 			rblog.White.Println("Disconnected from master:", disconnect.Addr)
 			if disconnect.Addr == currentMasterAddress {
-				rblog.Yellow.Println("Disconnected from master attempting reconnect", currentMasterAddress)
 				connAttempt.Reset(0)
 			}
 
 		case <-connAttempt.C:
-			rblog.White.Println("Attempt at dialing to connect to master")
 			conn, err := net.DialTimeout("tcp4", currentMasterAddress, dialTimeout)
 			if err == nil {
-				rblog.White.Println("Connected to master")
+				rblog.White.Println("Connected to master:", currentMasterAddress)
 				close(senderQuitCh)
 				senderQuitCh = make(chan struct{})
 				masterConn = conn.(*net.TCPConn)
@@ -91,7 +88,6 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 
 	case mscomm.RequestHallRequests:
 		senderCh <- hallRequests
-		rblog.White.Println("Sent hallrequests")
 		
 	case mscomm.SyncRequests:
 		hallRequests = payload.Requests
