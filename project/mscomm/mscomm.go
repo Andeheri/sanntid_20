@@ -28,23 +28,26 @@ type Lights [][2]bool
 type AssignedRequests [][2]bool
 type HallRequests [][2]bool
 
-func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
-	if len(*hr1) != len(*hr2) {
+func (hr1 *HallRequests) Merge(hr2 HallRequests) error {
+	if len(*hr1) != len(hr2) {
 		return fmt.Errorf("HallRequests length mismatch")
 	}
 	for i := range *hr1 {
-		(*hr1)[i][0] = (*hr1)[i][0] || (*hr2)[i][0]
-		(*hr1)[i][1] = (*hr1)[i][1] || (*hr2)[i][1]
+		(*hr1)[i][0] = (*hr1)[i][0] || (hr2)[i][0]
+		(*hr1)[i][1] = (*hr1)[i][1] || (hr2)[i][1]
 	}
 	return nil
 }
 
-func (hr *HallRequests) Set(btn ButtonPressed) {
-	(*hr)[btn.Floor][btn.Button] = true
-}
-
-func (hr *HallRequests) Clear(order OrderComplete) {
-	(*hr)[order.Floor][order.Button] = false
+func (ar *AssignedRequests) IsEmpty() bool {
+	for _, floor := range *ar {
+		for _, button := range floor {
+			if button {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 type SyncRequests struct {
@@ -58,22 +61,6 @@ type SyncOK struct {
 
 type RequestState struct{}
 type RequestHallRequests struct{}
-
-type MISOChBundle struct {
-	HallRequests  chan HallRequests
-	ElevatorState chan ElevatorState
-	ButtonPressed chan ButtonPressed
-	OrderComplete chan OrderComplete
-	SyncOK        chan SyncOK
-}
-
-type MOSIChBundle struct {
-	RequestHallRequests chan RequestHallRequests
-	RequestState        chan RequestState
-	UpdateOrders        chan HallRequests
-	UpdateLights        chan Lights
-	AssignedRequests    chan AssignedRequests
-}
 
 type TypeTaggedJSON struct {
 	TypeId string
@@ -173,7 +160,7 @@ func TCPReader(conn *net.TCPConn, ch chan<- Package, disconnectEventCh chan<- Co
 }
 
 // Intended to run as a goroutine.
-// Returns only when sending something on quitCh.
+// Returns when sending something on quitCh or closing quitCh.
 func TCPSender(conn *net.TCPConn, ch <-chan interface{}, quitCh <-chan struct{}, timeout *time.Duration) {
 
 	defer conn.Close()
