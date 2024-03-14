@@ -28,13 +28,13 @@ type Lights [][2]bool
 type AssignedRequests [][2]bool
 type HallRequests [][2]bool
 
-func (hr1 *HallRequests) Merge(hr2 *HallRequests) error {
-	if len(*hr1) != len(*hr2) {
+func (hr1 *HallRequests) Merge(hr2 HallRequests) error {
+	if len(*hr1) != len(hr2) {
 		return fmt.Errorf("HallRequests length mismatch")
 	}
 	for i := range *hr1 {
-		(*hr1)[i][0] = (*hr1)[i][0] || (*hr2)[i][0]
-		(*hr1)[i][1] = (*hr1)[i][1] || (*hr2)[i][1]
+		(*hr1)[i][0] = (*hr1)[i][0] || (hr2)[i][0]
+		(*hr1)[i][1] = (*hr1)[i][1] || (hr2)[i][1]
 	}
 	return nil
 }
