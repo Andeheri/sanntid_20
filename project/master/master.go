@@ -37,6 +37,7 @@ type master struct {
 	orderCompleteTimeoutCh chan string
 	sickLeaveTimeoutCh     chan string
 	collectStateTimer      *time.Timer
+	retryAssignmentTimer   *time.Timer
 }
 
 const (
@@ -47,6 +48,7 @@ const (
 	watchdogResetPeriod  time.Duration = 300 * time.Millisecond
 	orderCompleteTimeout time.Duration = 15 * time.Second
 	sickLeaveDuration    time.Duration = 30 * time.Second
+	retryAssignmentDelay time.Duration = 200 * time.Millisecond
 	terminationDelay     time.Duration = 100 * time.Millisecond
 	floorCount           int           = 4
 )
@@ -174,11 +176,18 @@ func Start(masterPort int, quitCh chan struct{}) {
 				}()
 			}
 		case addr := <-m.sickLeaveTimeoutCh:
+<<<<<<< Updated upstream
 			if slave, exists := m.slaves[addr]; exists {
 				rblog.Magenta.Println("slave back from sick leave:", addr)
 				slave.employmentStatus = sesHired
 				m.collectStates()
 			}
+=======
+			m.onSickLeaveTimeout(addr)
+		case <-m.retryAssignmentTimer.C:
+			m.collectStates()
+
+>>>>>>> Stashed changes
 		case <-quitCh:
 			quitCh = nil //avoid endless loop if quitCh is closed
 			flog.Println("[INFO] master ready to quit")
@@ -349,6 +358,9 @@ func (m *master) init() {
 
 	m.collectStateTimer = time.NewTimer(collectStateTimeout)
 	m.collectStateTimer.Stop()
+
+	m.retryAssignmentTimer = time.NewTimer(retryAssignmentDelay)
+	m.retryAssignmentTimer.Stop()
 }
 
 func (m *master) dismiss(addr string) {
@@ -399,8 +411,10 @@ func (m *master) assignHallRequests() {
 	if len(assignerInput.States) == 0 {
 		rblog.Yellow.Println("Noone to assign to")
 		flog.Println("[WARNING] Noone to assign to")
+		m.retryAssignmentTimer.Reset(retryAssignmentDelay)
 		return
 	}
+	m.retryAssignmentTimer.Stop()
 
 	flog.Println("[INFO] starting assigner executable")
 	assignedRequests, err := assigner.Assign(&assignerInput)
