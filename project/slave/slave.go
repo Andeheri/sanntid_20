@@ -21,7 +21,7 @@ func Start(masterAddressCh <-chan string) {
 	go elevio.PollFloorSensor(drvFloorsCh)
 	go elevio.PollObstructionSwitch(drvObstrCh)
 
-	senderCh := make(chan interface{})
+	senderCh := make(chan interface{}, 1)
 	fromMasterCh := make(chan mscomm.Package)
 	go mastercom.ConnManager(masterAddressCh, senderCh, fromMasterCh)
 
@@ -30,12 +30,11 @@ func Start(masterAddressCh <-chan string) {
 	inbetweenFloorsTimer.Stop()
 	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
 
-	const watchDogTimeout = 1 * time.Second
+	const watchDogTimeout = 300 * time.Millisecond
 	watchDog := time.AfterFunc(watchDogTimeout, func() {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Watchdog timeout on slave")
 	})
-	defer watchDog.Stop()
 
 	rblog.White.Println("Slave started")
 
@@ -43,11 +42,11 @@ func Start(masterAddressCh <-chan string) {
 		select {
 		case a := <-drvButtonsCh:
 			if a.Button == elevio.BT_Cab {
-				fsm.OnRequestOrder(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
-				senderCh <- fsm.GetState()
+				fsm.OnNewRequest(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
+				mastercom.Send(senderCh, fsm.GetState())
 			} else {
 				pressed := mscomm.ButtonPressed{Floor: a.Floor, Button: int(a.Button)}
-				senderCh <- pressed
+				mastercom.Send(senderCh, pressed)
 			}
 
 		case a := <-drvFloorsCh:
@@ -56,7 +55,7 @@ func Start(masterAddressCh <-chan string) {
 		case a := <-drvObstrCh:
 			rblog.Yellow.Printf("Obstruction: %+v\n", a)
 			fsm.OnObstruction(a)
-			senderCh <- fsm.GetState()
+			mastercom.Send(senderCh, fsm.GetState())
 
 		case <-doorTimer.C:
 			fsm.OnDoorTimeout(doorTimer, inbetweenFloorsTimer, senderCh)
@@ -64,14 +63,14 @@ func Start(masterAddressCh <-chan string) {
 		case <-inbetweenFloorsTimer.C:
 			rblog.Red.Println("No floor arrival, setting Elev.Floor = -1")
 			fsm.Elev.Floor = -1
-			senderCh <- fsm.GetState()
+			mastercom.Send(senderCh, fsm.GetState())
 
 		case a := <-fromMasterCh:
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer, inbetweenFloorsTimer)
 
-		case <-time.After(watchDogTimeout / 5):
+		case <-time.After(watchDogTimeout / 2):
 		}
-		
+
 		watchDog.Reset(watchDogTimeout)
 	}
 }

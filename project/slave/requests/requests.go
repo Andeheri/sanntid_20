@@ -1,8 +1,9 @@
-//Based on https://github.com/TTK4145/Project-resources/tree/master/elev_algo
+// Based on https://github.com/TTK4145/Project-resources/tree/master/elev_algo
 package requests
 
 import (
 	"project/mscomm"
+	"project/rblog"
 	"project/slave/cabfile"
 	"project/slave/elevator"
 	"project/slave/elevio"
@@ -131,6 +132,7 @@ func ClearAtCurrentFloor(e elevator.Elevator, clearRequestCh chan<- interface{})
 	case elevio.MD_Stop:
 		e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
 		e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
+
 	default:
 		e = Clear(e, e.Floor, elevio.BT_HallUp, clearRequestCh)
 		e = Clear(e, e.Floor, elevio.BT_HallDown, clearRequestCh)
@@ -145,6 +147,10 @@ func Clear(e elevator.Elevator, floor int, btnType elevio.ButtonType, clearReque
 	}
 	e.Requests[floor][btnType] = 0
 	e.HallLights[floor][btnType] = false
-	clearRequestCh <- mscomm.OrderComplete{Floor: floor, Button: int(btnType)}
+	select {
+	case clearRequestCh <- mscomm.OrderComplete{Floor: floor, Button: int(btnType)}:
+	default:
+		rblog.Yellow.Println("clearRequestCh is full")
+	}
 	return e
 }

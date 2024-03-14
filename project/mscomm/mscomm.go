@@ -194,6 +194,7 @@ func TCPSender(conn *net.TCPConn, ch <-chan interface{}, quitCh <-chan struct{},
 			}
 			if err := encoder.Encode(ttj); err != nil {
 				//Probably disconnected
+				conn.Close()
 				rblog.Red.Println(err)
 			}
 		case <-quitCh:

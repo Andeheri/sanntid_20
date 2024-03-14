@@ -12,7 +12,8 @@ import (
 
 var hallRequests mscomm.HallRequests = mscomm.HallRequests{{false, false}, {false, false}, {false, false}, {false, false}}
 
-var TCPSendTimeOut time.Duration = 100 * time.Millisecond
+//TODO:play with this:
+var TCPSendTimeout time.Duration = 100 * time.Millisecond
 
 func ConnManager(masterAddressCh <-chan string, senderCh chan interface{}, fromMasterCh chan<- mscomm.Package) {
 	
@@ -76,7 +77,7 @@ func StartUp(masterConn *net.TCPConn, senderCh <-chan interface{}, fromMasterCh 
 		reflect.TypeOf(mscomm.AssignedRequests{}),
 	}
 
-	go mscomm.TCPSender(masterConn, senderCh, senderQuitCh, &TCPSendTimeOut)
+	go mscomm.TCPSender(masterConn, senderCh, senderQuitCh, &TCPSendTimeout)
 	go mscomm.TCPReader(masterConn, fromMasterCh, masterDisconnect, allowedTypes[:]...)
 }
 
@@ -84,14 +85,14 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 
 	switch payload := payload.(type) {
 	case mscomm.RequestState:
-		senderCh <- fsm.GetState()
+		Send(senderCh, fsm.GetState())
 
 	case mscomm.RequestHallRequests:
-		senderCh <- hallRequests
+		Send(senderCh, hallRequests)
 		
 	case mscomm.SyncRequests:
 		hallRequests = payload.Requests
-		senderCh <- mscomm.SyncOK{Id: payload.Id}
+		Send(senderCh, mscomm.SyncOK{Id: payload.Id})
 		
 	case mscomm.Lights:
 		fsm.Elev.HallLights = payload
@@ -105,5 +106,13 @@ func HandleMessage(payload interface{}, senderCh chan<- interface{}, doorTimer *
 
 	default:
 		rblog.Red.Println("Slave received invalid type on fromMasterCh", payload)
+	}
+}
+
+func Send(senderCh chan<- interface{}, payload interface{}) {
+	select{
+	case senderCh <- payload:
+	default:
+		rblog.Yellow.Println("senderCh is full")
 	}
 }
