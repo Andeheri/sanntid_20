@@ -19,7 +19,6 @@ var welcomeMessage string = "\033[41m \033[0m\033[41m \033[0m\033[43m \033[0m\03
 
 func main() {
 	fmt.Println(welcomeMessage)
-	//time.Sleep(100 * time.Millisecond) // To give elevatorserver time to boot
 
 	// Watchdog timer
 	watchdog := time.AfterFunc(watchdogTimeoutPeriod, func() {
