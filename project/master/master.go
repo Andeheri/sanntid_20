@@ -273,6 +273,7 @@ func (m *master) onOrderCompleteTimeout(addr string) {
 			time.Sleep(sickLeaveDuration)
 			m.sickLeaveTimeoutCh <- addr
 		}()
+		m.collectStates()
 	}
 }
 
