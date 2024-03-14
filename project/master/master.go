@@ -176,18 +176,14 @@ func Start(masterPort int, quitCh chan struct{}) {
 				}()
 			}
 		case addr := <-m.sickLeaveTimeoutCh:
-<<<<<<< Updated upstream
 			if slave, exists := m.slaves[addr]; exists {
 				rblog.Magenta.Println("slave back from sick leave:", addr)
 				slave.employmentStatus = sesHired
 				m.collectStates()
 			}
-=======
-			m.onSickLeaveTimeout(addr)
 		case <-m.retryAssignmentTimer.C:
 			m.collectStates()
 
->>>>>>> Stashed changes
 		case <-quitCh:
 			quitCh = nil //avoid endless loop if quitCh is closed
 			flog.Println("[INFO] master ready to quit")
