@@ -20,17 +20,14 @@ var welcomeMessage string = "\033[41m \033[0m\033[41m \033[0m\033[43m \033[0m\03
 func main() {
 	fmt.Println(welcomeMessage)
 
-	// Watchdog timer
 	watchdog := time.AfterFunc(watchdogTimeoutPeriod, func() {
 		rblog.Red.Println("[ERROR] main froze")
 		panic("Vaktbikkje sier voff! - main froze. Resets program.")
 	})
 
-	// Variables
 	elevatorRole := scout.Slave
 	masterIP := scout.LoopbackIP // Default is loopback address
 
-	// Channels
 	fromMSEChannel := make(chan scout.FromMSE)
 	masterAddressChannel := make(chan string)
 	masterQuitChannel := make(chan struct{})

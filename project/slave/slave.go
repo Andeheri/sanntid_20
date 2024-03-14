@@ -5,14 +5,14 @@ import (
 	"project/rblog"
 	"project/slave/elevio"
 	"project/slave/fsm"
+	"project/slave/iodevice"
 	"project/slave/mastercom"
 	"time"
 )
 
+//To be run as a goroutine
 func Start(masterAddressCh <-chan string) {
-	numFloors := 4
-
-	elevio.Init("localhost:15657", numFloors)
+	elevio.Init("localhost:15657", iodevice.N_FLOORS)
 
 	drvButtonsCh := make(chan elevio.ButtonEvent)
 	drvFloorsCh := make(chan int)
@@ -26,7 +26,6 @@ func Start(masterAddressCh <-chan string) {
 	fromMasterCh := make(chan mscomm.Package)
 	go mastercom.ConnManager(masterAddressCh, senderCh, fromMasterCh)
 
-	//TODO: set to something other than -1
 	doorTimer := time.NewTimer(-1)
 	inbetweenFloorsTimer := time.NewTimer(-1)
 	inbetweenFloorsTimer.Stop()
@@ -46,7 +45,7 @@ func Start(masterAddressCh <-chan string) {
 		select {
 		case a := <-drvButtonsCh:
 			if a.Button == elevio.BT_Cab {
-				fsm.OnRequestButtonPress(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
+				fsm.OnNewRequest(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
 				select {
 				case senderCh <- fsm.GetState():
 				case <-time.After(10 * time.Millisecond):

@@ -1,3 +1,4 @@
+// Based on https://github.com/TTK4145/Project-resources/tree/master/elev_algo
 package iodevice
 
 import (
