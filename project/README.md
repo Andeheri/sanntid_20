@@ -25,10 +25,19 @@ curl -LJO https://github.com/TTK4145/Project-resources/releases/download/v1.1.1/
 ```
 
 ## Usage
+
+```bash
+chmod +x runElevator.sh
+```
+
 compile go project
 
 ```bash
 go build -o gloriousElevator main.go
 ```
 
-run in infinite loop
+make sure to have the elevator server running and then 
+
+```bash
+./runElevator.sh
+```
