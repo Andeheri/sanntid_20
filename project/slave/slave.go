@@ -30,7 +30,7 @@ func Start(masterAddressCh <-chan string) {
 	inbetweenFloorsTimer.Stop()
 	fsm.Init(doorTimer, inbetweenFloorsTimer, senderCh)
 
-	const watchDogTimeout = 300 * time.Millisecond
+	const watchDogTimeout = 500 * time.Millisecond
 	watchDog := time.AfterFunc(watchDogTimeout, func() {
 		elevio.SetMotorDirection(elevio.MD_Stop)
 		panic("Watchdog timeout on slave")
@@ -41,6 +41,8 @@ func Start(masterAddressCh <-chan string) {
 	for {
 		select {
 		case a := <-drvButtonsCh:
+			rblog.Green.Printf("Buttons: %+v\n", a)
+
 			if a.Button == elevio.BT_Cab {
 				fsm.OnNewRequest(a.Floor, a.Button, doorTimer, inbetweenFloorsTimer, senderCh)
 				mastercom.Send(senderCh, fsm.GetState())
@@ -50,6 +52,8 @@ func Start(masterAddressCh <-chan string) {
 			}
 
 		case a := <-drvFloorsCh:
+			rblog.Green.Printf("Floor: %+v\n", a)
+
 			fsm.OnFloorArrival(a, doorTimer, inbetweenFloorsTimer, senderCh)
 
 		case a := <-drvObstrCh:
@@ -58,6 +62,8 @@ func Start(masterAddressCh <-chan string) {
 			mastercom.Send(senderCh, fsm.GetState())
 
 		case <-doorTimer.C:
+			rblog.Green.Println("Door timeout")
+
 			fsm.OnDoorTimeout(doorTimer, inbetweenFloorsTimer, senderCh)
 
 		case <-inbetweenFloorsTimer.C:
@@ -66,11 +72,12 @@ func Start(masterAddressCh <-chan string) {
 			mastercom.Send(senderCh, fsm.GetState())
 
 		case a := <-fromMasterCh:
+			rblog.Green.Printf("From master: %+v\n", a)
+
 			mastercom.HandleMessage(a.Payload, senderCh, doorTimer, inbetweenFloorsTimer)
 
-		case <-time.After(watchDogTimeout / 2):
+		case <-time.After(watchDogTimeout / 3):
 		}
-
 		watchDog.Reset(watchDogTimeout)
 	}
 }
