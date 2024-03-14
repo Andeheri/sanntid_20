@@ -25,6 +25,10 @@ curl -LJO https://github.com/TTK4145/Project-resources/releases/download/v1.1.1/
 ```
 
 ## Usage
-compile go binary
+compile go project
+
+```bash
+go build -o gloriousElevator main.go
+```
 
 run in infinite loop
