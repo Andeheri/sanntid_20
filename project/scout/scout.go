@@ -34,7 +34,7 @@ const (
 	LoopbackIP              string        = "127.0.0.1"
 	broadcastAddr           string        = "255.255.255.255"
 	numKeepAlive            int           = 5 // Number of missed keep-alive messages missed before assumed offline
-	deltaTKeepAlive         time.Duration = 50 * time.Millisecond
+	deltaTKeepAlive         time.Duration = 25 * time.Millisecond
 	deltaTSamplingKeepAlive time.Duration = 100 * time.Millisecond
 )
 
